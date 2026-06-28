@@ -206,7 +206,7 @@ function toggleRecycleBin() {
   chev.style.transform = open ? '' : 'rotate(90deg)';
 }
 
-function isMobile() { return window.innerWidth <= 700; }
+function isMobile() { return window.innerWidth <= 768; }
 
 function switchMobilePanel(panelId, btn) {
   ['left-panel','center-panel','right-panel'].forEach(id => {
@@ -219,7 +219,11 @@ function switchMobilePanel(panelId, btn) {
 
 function initMobilePanels() {
   if (!isMobile()) return;
-  switchMobilePanel('left-panel', document.querySelector('.mob-nav-btn[data-panel="left-panel"]'));
+  // Only set default panel on first load — don't reset on keyboard-triggered resize
+  const hasActive = document.querySelector('.mob-active');
+  if (!hasActive) {
+    switchMobilePanel('left-panel', document.querySelector('.mob-nav-btn[data-panel="left-panel"]'));
+  }
 }
 
 async function loadPatient(id) {
@@ -1338,6 +1342,76 @@ async function saveVisit() {
   toast('Visit saved successfully');
 }
 
+async function sharePrescription() {
+  if (!State.currentPatient || !State.currentVisit) { toast('No patient selected', 'error'); return; }
+  await saveVisit();
+
+  const p = State.currentPatient;
+  const v = State.currentVisit;
+  const phone = (p.whatsapp || p.phone || '').replace(/\D/g, '');
+  const patientName = p.name || 'Patient';
+  const diagnosis = v.diagnosis || '';
+  const date = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+
+  const msgText = `Dear ${patientName},\n\nPlease find your prescription from Dr Chetan M Dojode dated ${date}${diagnosis ? ' for ' + diagnosis : ''}.\n\nAarna Orthopaedic Clinic\nPh: +91 ${DOCTOR.phone || ''}`;
+
+  // Try Web Share API with PDF (works on Android Chrome — opens native share sheet)
+  if (navigator.share && navigator.canShare) {
+    try {
+      toast('Generating PDF…');
+      const html = await buildPrescriptionHtml();
+      if (!html) { toast('Could not generate prescription', 'error'); return; }
+      const blob = await renderHtmlToPdfBlob(html);
+      const fileName = `Rx_${patientName.replace(/\s+/g,'_')}_${date.replace(/\s/g,'-')}.pdf`;
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Prescription – ${patientName}`, text: msgText });
+        return;
+      }
+    } catch(e) {
+      if (e.name !== 'AbortError') console.warn('Share API error', e);
+      else return; // user cancelled
+    }
+  }
+
+  // Fallback: show share options panel
+  showSharePanel(phone, msgText, patientName);
+}
+
+function showSharePanel(phone, msgText, patientName) {
+  const encoded = encodeURIComponent(msgText);
+  const waLink  = phone ? `https://wa.me/91${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+  const smsLink = `sms:${phone ? '+91'+phone : ''}?body=${encoded}`;
+  const emailLink = State.currentPatient?.email
+    ? `mailto:${State.currentPatient.email}?subject=Prescription – ${encodeURIComponent(patientName)}&body=${encoded}`
+    : null;
+
+  // Remove existing panel
+  document.getElementById('share-panel')?.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'share-panel';
+  panel.className = 'share-panel';
+  panel.innerHTML = `
+    <div class="share-panel-header">
+      <span>📤 Send Prescription</span>
+      <button onclick="document.getElementById('share-panel').remove()">✕</button>
+    </div>
+    <div class="share-panel-body">
+      <a class="share-btn share-wa" href="${waLink}" target="_blank" rel="noopener">
+        <span>📱</span> WhatsApp${phone ? ' · +91 '+phone : ''}
+      </a>
+      <a class="share-btn share-sms" href="${smsLink}">
+        <span>💬</span> SMS${phone ? ' · +91 '+phone : ''}
+      </a>
+      ${emailLink ? `<a class="share-btn share-email" href="${emailLink}"><span>📧</span> Email · ${State.currentPatient.email}</a>` : ''}
+      <div class="share-note">💡 On Android, tap 📤 Send above — it opens WhatsApp/SMS directly with the PDF attached.</div>
+    </div>`;
+
+  document.body.appendChild(panel);
+}
+
 async function printPrescription() {
   if (!State.currentPatient) { toast('No patient selected', 'error'); return; }
 
@@ -1715,7 +1789,6 @@ function purgeRemovedMedicines() {
 async function init() {
   purgeRemovedMedicines();
   initMobilePanels();
-  window.addEventListener('resize', initMobilePanels);
   // Render built-in templates immediately – no DB needed
   TmplState.allTemplates = Object.entries(CONDITION_TEMPLATES).map(([key, t], i) => ({
     id: key, label: t.label, icon: t.icon, isBuiltIn: true, order: i, ...t
