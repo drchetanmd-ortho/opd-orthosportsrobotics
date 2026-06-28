@@ -82,6 +82,9 @@ body { font-family: var(--font); font-size: 13.5px; color: var(--text); backgrou
 .share-sms { background: #6366f1; color: #fff; }
 .share-email { background: #f59e0b; color: #fff; }
 .share-note { font-size: 11px; color: var(--text3); padding: 4px 2px; line-height: 1.5; }
+.share-native { background: #10b981; color: #fff; }
+.share-pdf    { background: #e11d48; color: #fff; cursor: pointer; }
+.share-divider { text-align: center; font-size: 11px; color: var(--text3); padding: 2px 0; }
 
 @media (max-width: 768px) {
   .share-panel { right: 8px; left: 8px; width: auto; bottom: 64px; }
@@ -862,6 +865,13 @@ input.modal-input:focus, select.modal-input:focus {
 }
 .bep-test-btn:hover { background: #dbeafe; }
 .bep-diag-hint { margin-top: 10px; font-size: 11px; color: #0369a1; font-style: italic; }
+.bep-diag-section { margin-top: 10px; }
+.bep-diag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.bep-diag-chip {
+  padding: 5px 12px; border: 1px solid #6366f1; border-radius: 14px;
+  background: #fff; font-size: 12px; cursor: pointer; color: #4338ca; font-weight: 500;
+}
+.bep-diag-chip:hover, .bep-diag-chip:active { background: #6366f1; color: #fff; }
 
 /* ── Outcome Scores ──────────────────────────────────────────────────────── */
 .btn-score { background: #7c3aed; color: #fff; border-color: #7c3aed; }

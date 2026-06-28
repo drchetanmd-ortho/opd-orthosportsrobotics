@@ -124,7 +124,6 @@
             style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:3px 7px;font-size:13px;cursor:pointer;color:var(--text2);">✏️</button>
         </div>
         <div class="header-actions">
-          <button class="action-btn btn-score" onclick="openScorePicker()" title="Outcome Scores">📊 Score</button>
           <button class="action-btn btn-save" onclick="saveVisit()">💾 Save</button>
           <button class="action-btn btn-print" onclick="printPrescription()">🖨️ Print Rx</button>
           <button class="action-btn btn-share" onclick="sharePrescription()" title="Send to patient">📤 Send</button>
@@ -303,6 +302,23 @@
           <div class="section-content">
             <textarea id="field-procedure" class="form-field" rows="2"
               placeholder="Intra-articular injection · PRP · Aspiration · MUA · Cast applied…"></textarea>
+          </div>
+        </div>
+
+        <!-- Outcome Score -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>📊</span> Outcome Scores
+          </div>
+          <div class="section-content">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              <button class="bep-btn" onclick="openOutcomeScoreModal('oxford_knee')">Oxford Knee</button>
+              <button class="bep-btn" onclick="openOutcomeScoreModal('oxford_hip')">Oxford Hip</button>
+              <button class="bep-btn" onclick="openOutcomeScoreModal('koos')">KOOS</button>
+              <button class="bep-btn" onclick="openOutcomeScoreModal('ikdc')">IKDC</button>
+              <button class="bep-btn" onclick="openOutcomeScoreModal('constant_shoulder')">Constant Shoulder</button>
+              <button class="bep-btn" onclick="openOutcomeScoreModal('vas_pain')">VAS Pain</button>
+            </div>
           </div>
         </div>
 

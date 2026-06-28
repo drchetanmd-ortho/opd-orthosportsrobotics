@@ -1352,44 +1352,61 @@ async function sharePrescription() {
   const patientName = p.name || 'Patient';
   const diagnosis = v.diagnosis || '';
   const date = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  const msgText = `Dear ${patientName},\n\nYour prescription from Dr Chetan M Dojode dated ${date}${diagnosis ? '\nDiagnosis: ' + diagnosis : ''}.\n\nAarna Orthopaedic & SportsMed Clinic\nPh: +91 ${DOCTOR.phone || ''}`;
 
-  const msgText = `Dear ${patientName},\n\nPlease find your prescription from Dr Chetan M Dojode dated ${date}${diagnosis ? ' for ' + diagnosis : ''}.\n\nAarna Orthopaedic Clinic\nPh: +91 ${DOCTOR.phone || ''}`;
-
-  // Try Web Share API with PDF (works on Android Chrome — opens native share sheet)
-  if (navigator.share && navigator.canShare) {
-    try {
-      toast('Generating PDF…');
-      const html = await buildPrescriptionHtml();
-      if (!html) { toast('Could not generate prescription', 'error'); return; }
-      const blob = await renderHtmlToPdfBlob(html);
-      const fileName = `Rx_${patientName.replace(/\s+/g,'_')}_${date.replace(/\s/g,'-')}.pdf`;
-      const file = new File([blob], fileName, { type: 'application/pdf' });
-
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: `Prescription – ${patientName}`, text: msgText });
-        return;
-      }
-    } catch(e) {
-      if (e.name !== 'AbortError') console.warn('Share API error', e);
-      else return; // user cancelled
-    }
-  }
-
-  // Fallback: show share options panel
+  // Show panel immediately — don't wait for PDF
   showSharePanel(phone, msgText, patientName);
+
+  // Generate PDF in background and add download + native share button
+  generateAndAttachPdf(patientName, date, msgText);
+}
+
+async function generateAndAttachPdf(patientName, date, msgText) {
+  const btn = document.getElementById('share-pdf-btn');
+  if (btn) btn.textContent = '⏳ Generating PDF…';
+  try {
+    const html = await buildPrescriptionHtml();
+    if (!html) return;
+    const blob = await renderHtmlToPdfBlob(html);
+    const fileName = `Rx_${patientName.replace(/\s+/g,'_')}_${date.replace(/\s/g,'-')}.pdf`;
+    const file = new File([blob], fileName, { type: 'application/pdf' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    // Update download button
+    const dlBtn = document.getElementById('share-pdf-btn');
+    if (dlBtn) {
+      dlBtn.outerHTML = `<a id="share-pdf-btn" class="share-btn share-pdf" href="${blobUrl}" download="${fileName}">
+        <span>📄</span> Download PDF — then attach in WhatsApp
+      </a>`;
+    }
+
+    // Add native share button if supported
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      const nativeBtn = document.getElementById('share-native-btn');
+      if (nativeBtn) {
+        nativeBtn.style.display = 'flex';
+        nativeBtn.onclick = async () => {
+          try { await navigator.share({ files: [file], title: `Prescription – ${patientName}`, text: msgText }); }
+          catch(e) { if (e.name !== 'AbortError') toast('Share failed', 'error'); }
+        };
+      }
+    }
+  } catch(e) {
+    console.error('PDF generation failed', e);
+    const btn = document.getElementById('share-pdf-btn');
+    if (btn) btn.textContent = '⚠️ PDF generation failed';
+  }
 }
 
 function showSharePanel(phone, msgText, patientName) {
   const encoded = encodeURIComponent(msgText);
   const waLink  = phone ? `https://wa.me/91${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
   const smsLink = `sms:${phone ? '+91'+phone : ''}?body=${encoded}`;
-  const emailLink = State.currentPatient?.email
-    ? `mailto:${State.currentPatient.email}?subject=Prescription – ${encodeURIComponent(patientName)}&body=${encoded}`
-    : null;
+  const email   = State.currentPatient?.email;
+  const emailLink = email
+    ? `mailto:${email}?subject=${encodeURIComponent('Prescription – ' + patientName)}&body=${encoded}` : null;
 
-  // Remove existing panel
   document.getElementById('share-panel')?.remove();
-
   const panel = document.createElement('div');
   panel.id = 'share-panel';
   panel.className = 'share-panel';
@@ -1399,16 +1416,23 @@ function showSharePanel(phone, msgText, patientName) {
       <button onclick="document.getElementById('share-panel').remove()">✕</button>
     </div>
     <div class="share-panel-body">
+      <button id="share-native-btn" class="share-btn share-native" style="display:none">
+        <span>🚀</span> Share PDF directly (WhatsApp / any app)
+      </button>
+      <div id="share-pdf-btn" class="share-btn share-pdf" style="opacity:.6;pointer-events:none">
+        <span>📄</span> ⏳ Generating PDF…
+      </div>
+      <div class="share-divider">— or send text message —</div>
       <a class="share-btn share-wa" href="${waLink}" target="_blank" rel="noopener">
-        <span>📱</span> WhatsApp${phone ? ' · +91 '+phone : ''}
+        <span>📱</span> WhatsApp${phone ? ' · ' + phone : ' (no number saved)'}
       </a>
       <a class="share-btn share-sms" href="${smsLink}">
-        <span>💬</span> SMS${phone ? ' · +91 '+phone : ''}
+        <span>💬</span> SMS${phone ? ' · ' + phone : ' (no number saved)'}
       </a>
-      ${emailLink ? `<a class="share-btn share-email" href="${emailLink}"><span>📧</span> Email · ${State.currentPatient.email}</a>` : ''}
-      <div class="share-note">💡 On Android, tap 📤 Send above — it opens WhatsApp/SMS directly with the PDF attached.</div>
+      ${emailLink ? `<a class="share-btn share-email" href="${emailLink}">
+        <span>📧</span> Email · ${email}</a>` : ''}
+      <div class="share-note">Tip: Download PDF → open WhatsApp → tap 📎 → Document → select PDF</div>
     </div>`;
-
   document.body.appendChild(panel);
 }
 

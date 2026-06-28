@@ -27,7 +27,7 @@ const EXAM_TEMPLATES = {
     examination: 'Inspection: Gait (Trendelenburg/Antalgic), LLD, Muscle wasting\nPalpation: Greater trochanter, Groin, ASIS\nROM: Flexion ___° Extension ___° Abduction ___° Adduction ___° IR ___° ER ___°\nSpecial Tests:\n• FABER (Patrick): Neg/Pos\n• FADIR: Neg/Pos\n• Log Roll: Neg/Pos\n• Thomas Test: Neg/Pos\n• Trendelenburg: Neg/Pos\n• Straight Leg Raise: ___°\nLLD: True ___cm Apparent ___cm\nNeurovascular: Intact',
     investigations: 'X-Ray Pelvis AP\nX-Ray Hip Lateral (Cross-table/Frog-leg)\nMRI Hip',
     advice: 'Walking aid if required\nWeight loss\nLow-impact exercise: swimming, cycling\nAvoid high-impact sports',
-    specialTests: ['FABER (Patrick)','FADIR','Log Roll','Thomas Test','Trendelenburg','Ober Test','Ely Test','SLR','Gaenslen','Hip Scour']
+    specialTests: ['FABER (Patrick)','FADIR','Log Roll','Thomas Test','Trendelenburg','Ober Test','Ely Test','SLR','Gaenslen']
   },
   shoulder: {
     history: 'Pain: location / radiation / severity (VAS /10)\nDuration / Mechanism\nInstability episodes\nNight pain\nOverhead activity pain\nSport: throwing / racquet / swimming\nDominant hand involvement\nNeck symptoms',
@@ -146,18 +146,22 @@ function selectBodyPart(partId) {
         ${tmpl.specialTests.map(t => `<button class="bep-test-btn" onclick="addSpecialTest('${t.replace(/'/g,"\\'")}')">${t}</button>`).join('')}
       </div>
     </div>
-    <div class="bep-diag-hint">
-      💡 Type in Diagnosis field to see ${partId} diagnoses
-    </div>
+    ${buildDiagChips(partId)}
   `;
   panel.style.display = 'block';
+}
 
-  // Pre-filter diagnosis search for this body part
-  const diagInput = document.getElementById('field-diagnosis');
-  if (diagInput && !diagInput.value) {
-    // Trigger suggestions for this body part
-    filterDiagByBodyPart(partId);
-  }
+function buildDiagChips(partId) {
+  if (typeof ORTHO_DIAGNOSES === 'undefined') return '';
+  const results = ORTHO_DIAGNOSES.filter(d => d.body === partId).slice(0, 12);
+  if (!results.length) return '';
+  const chips = results.map(d =>
+    `<button class="bep-diag-chip" onclick='applyDiagnosis(${JSON.stringify(d).replace(/'/g,"&#39;")})'>${d.label}</button>`
+  ).join('');
+  return `<div class="bep-diag-section">
+    <div class="bep-tests-label">Diagnoses — tap to apply:</div>
+    <div class="bep-diag-chips">${chips}</div>
+  </div>`;
 }
 
 function encodeField(text) {
