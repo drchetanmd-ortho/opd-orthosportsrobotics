@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a6ef5">
+<meta name="description" content="Aarna Orthopaedic Clinic – OPD Module for Dr Chetan M Dojode">
+<title>Aarna Orthopaedic Clinic · Dr Chetan M Dojode</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── TOP BAR ─────────────────────────────────────────────────────────── -->
+  <header id="topbar">
+    <div class="tb-left">
+      <img src="assets/logo.png" class="tb-logo-img" alt="Aarna Orthopaedic Clinic">
+      <div>
+        <div class="tb-logo"><span>Dr Chetan M Dojode</span></div>
+        <div id="today-date"></div>
+      </div>
+    </div>
+    <div class="tb-right">
+      <button class="tb-btn tb-btn-backup" onclick="openBackupModal()" title="Backup / Restore">
+        <span id="backup-status-icon">☁</span> Backup
+      </button>
+    </div>
+  </header>
+
+  <!-- ── MOBILE BOTTOM NAV ─────────────────────────────────────────────── -->
+  <nav id="mobile-nav">
+    <button class="mob-nav-btn active" data-panel="left-panel" onclick="switchMobilePanel('left-panel',this)">
+      <span>👤</span><span>Patients</span>
+    </button>
+    <button class="mob-nav-btn" data-panel="center-panel" onclick="switchMobilePanel('center-panel',this)">
+      <span>📋</span><span>Consult</span>
+    </button>
+    <button class="mob-nav-btn" data-panel="right-panel" onclick="switchMobilePanel('right-panel',this)">
+      <span>💊</span><span>Medicines</span>
+    </button>
+    <button class="mob-nav-btn" onclick="openBackupModal()">
+      <span id="mob-backup-icon">☁</span><span>Backup</span>
+    </button>
+  </nav>
+
+  <!-- ── MAIN 3-PANEL ────────────────────────────────────────────────────── -->
+  <main id="main">
+
+    <!-- ── LEFT PANEL: Patients ─────────────────────────────────────────── -->
+    <aside id="left-panel" class="panel">
+      <!-- Search -->
+      <div class="left-search-bar">
+        <div class="search-wrap">
+          <input id="patient-search" type="text" placeholder="Search by name, phone, ID…" autocomplete="off">
+        </div>
+      </div>
+
+      <!-- Search results (shown while typing) -->
+      <div id="patient-search-results" style="display:none;flex:1;overflow-y:auto;"></div>
+
+      <!-- Tabs (hidden while searching) -->
+      <div id="left-tabs-area" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+        <div class="left-tabs-header">
+          <button class="btn-new-patient-left" onclick="openNewPatientModal()">+ New</button>
+          <div class="left-tabs">
+            <div class="left-tab active" data-tab="today" onclick="switchLeftTab('today')">Today</div>
+            <div class="left-tab" data-tab="recent" onclick="switchLeftTab('recent')">Recent</div>
+            <div class="left-tab" data-tab="followup" onclick="switchLeftTab('followup')">Follow-up</div>
+          </div>
+        </div>
+
+        <!-- Today -->
+        <div id="ltab-today" class="left-tab-panel active">
+          <div id="patient-list"></div>
+        </div>
+
+        <!-- Recent -->
+        <div id="ltab-recent" class="left-tab-panel">
+          <div id="patient-list-recent"></div>
+        </div>
+
+        <!-- Follow-up (placeholder) -->
+        <div id="ltab-followup" class="left-tab-panel">
+          <div class="empty-state">
+            <span class="empty-icon">📅</span>
+            <p>Follow-up scheduling coming soon</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recycle Bin -->
+      <div id="recycle-bin-bar" onclick="toggleRecycleBin()" title="Recycle Bin">
+        <span>🗑 Recycle Bin</span>
+        <span id="recycle-bin-count" class="rb-count" style="display:none"></span>
+        <span id="recycle-bin-chevron" style="font-size:11px;color:var(--text3)">›</span>
+      </div>
+      <div id="recycle-bin-panel" style="display:none;overflow-y:auto;max-height:220px;border-top:1px solid var(--border);">
+        <div id="recycle-bin-list"></div>
+      </div>
+
+      <div class="kb-hint">Ctrl+K &nbsp;Med &nbsp;·&nbsp; Ctrl+S &nbsp;Save &nbsp;·&nbsp; Ctrl+P &nbsp;Print</div>
+    </aside>
+
+    <!-- ── CENTER PANEL: Consultation ───────────────────────────────────── -->
+    <section id="center-panel" class="panel">
+
+      <!-- Patient Header -->
+      <div class="patient-header">
+        <div>
+          <div id="patient-header-name" style="color:#94a3b8;font-size:15px;font-weight:500;">
+            Select a patient to begin
+          </div>
+          <div id="patient-header-meta"></div>
+        </div>
+        <div class="header-actions">
+          <button class="action-btn btn-save" onclick="saveVisit()">💾 Save</button>
+          <button class="action-btn btn-print" onclick="printPrescription()">🖨️ Print Rx</button>
+          <button class="action-btn btn-invoice" onclick="openInvoiceModal()">🧾 Invoice</button>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="center-empty" class="center-empty">
+        <div class="center-empty-icon">🩺</div>
+        <h3>No patient selected</h3>
+        <p>Search for a patient or register a new one to start the consultation</p>
+      </div>
+
+      <!-- Consultation Form (hidden until patient selected) -->
+      <div id="consultation-form" style="display:none;" class="consultation-body">
+
+        <!-- 1. Chief Complaint -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>📋</span> Chief Complaint
+          </div>
+          <div class="section-content">
+            <textarea id="field-complaints" class="form-field" rows="2"
+              placeholder="e.g. Right knee pain for 3 months, worse on walking…" autocomplete="off"></textarea>
+          </div>
+        </div>
+
+        <!-- 2. History of Present Illness -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>🩺</span> History of Present Illness
+          </div>
+          <div class="section-content">
+            <textarea id="field-hopi" class="form-field" rows="3"
+              placeholder="Onset, duration, progression, aggravating/relieving factors…"></textarea>
+          </div>
+        </div>
+
+        <!-- 3. Past Medical History -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>📝</span> Past Medical History
+          </div>
+          <div class="section-content">
+            <textarea id="field-past-history" class="form-field" rows="2"
+              placeholder="DM, HTN, previous surgeries, fractures, medications…"></textarea>
+          </div>
+        </div>
+
+        <!-- 4. Allergies -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>⚠️</span> Allergies
+          </div>
+          <div class="section-content">
+            <input id="field-allergies" class="form-field" type="text"
+              placeholder="NKDA · Penicillin · NSAIDs…">
+          </div>
+        </div>
+
+        <!-- 5. Examination -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>🔬</span> Examination
+          </div>
+          <div class="section-content">
+            <textarea id="field-examination" class="form-field" rows="4"
+              placeholder="Tenderness over…&#10;Range of motion…&#10;Special tests…&#10;Neurological…"></textarea>
+          </div>
+        </div>
+
+        <!-- 6. Investigations -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>🧪</span> Investigations
+          </div>
+          <div class="section-content">
+            <textarea id="field-investigations" class="form-field" rows="2"
+              placeholder="X-Ray Knee AP/Lat · MRI Knee · CBC · ESR · CRP…"></textarea>
+          </div>
+        </div>
+
+        <!-- 7. Diagnosis -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>🏥</span> Diagnosis
+          </div>
+          <div class="section-content">
+            <div class="form-row">
+              <input id="field-diagnosis" class="form-field" type="text"
+                placeholder="e.g. Osteoarthritis of Knee" style="flex:3">
+              <input id="field-icd10" class="form-field" type="text"
+                placeholder="ICD-10" style="flex:1">
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. Rx Prescription -->
+        <div class="rx-section">
+          <div class="rx-header">
+            <span>Rx Prescription</span>
+          </div>
+          <table class="rx-table">
+            <thead>
+              <tr>
+                <th style="width:26px">#</th>
+                <th style="width:52px">Type</th>
+                <th>Medicine</th>
+                <th style="width:90px">Dosage</th>
+                <th style="width:130px">Administration</th>
+                <th style="width:120px">Frequency</th>
+                <th style="width:110px">Duration</th>
+                <th style="width:50px">Qty</th>
+                <th style="width:140px">Details</th>
+                <th style="width:140px">Notes</th>
+                <th style="width:28px"></th>
+              </tr>
+            </thead>
+            <tbody id="rx-table-body">
+              <tr class="rx-empty">
+                <td colspan="11">
+                  <span>Search or browse medicines on the right →</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 9. Advice -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>💡</span> Advice
+          </div>
+          <div class="section-content">
+            <textarea id="field-advice" class="form-field" rows="3"
+              placeholder="Hot/cold pack&#10;Physiotherapy&#10;Activity restrictions…"></textarea>
+          </div>
+        </div>
+
+        <!-- 10. Follow Up Plan -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>📅</span> Follow Up Plan
+          </div>
+          <div class="section-content">
+            <input id="field-follow-up" class="form-field" type="text"
+              placeholder="e.g. 2 Weeks · 1 Month · 6 Weeks · Review with MRI report">
+          </div>
+        </div>
+
+        <!-- 11. Referral -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>↗️</span> Referral
+          </div>
+          <div class="section-content">
+            <input id="field-referred-to" class="form-field" type="text"
+              placeholder="e.g. Dr Name · Speciality · Hospital / Physiotherapist / Dietitian…">
+          </div>
+        </div>
+
+        <!-- 12. Procedure Done (suggested) -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>💉</span> Procedure Done
+          </div>
+          <div class="section-content">
+            <textarea id="field-procedure" class="form-field" rows="2"
+              placeholder="Intra-articular injection · PRP · Aspiration · MUA · Cast applied…"></textarea>
+          </div>
+        </div>
+
+        <!-- Internal Notes (not printed) -->
+        <div class="form-section">
+          <div class="section-header" onclick="toggleSection(this)">
+            <span>🔒</span> Internal Notes <span style="font-size:10px;font-weight:400;opacity:.6;margin-left:4px;">not printed</span>
+          </div>
+          <div class="section-content">
+            <textarea id="field-notes" class="form-field" rows="2"
+              placeholder="Private notes, reminders, billing notes…"></textarea>
+          </div>
+        </div>
+
+        <!-- Previous Visits -->
+        <div id="prev-visits-section" class="prev-visits-bottom" style="display:none;">
+          <div class="pvb-header">
+            <span class="pvb-title">Past Visits</span>
+            <span id="pvb-count" class="pvb-count"></span>
+          </div>
+          <div id="prev-visits" class="pvb-tabs-row"></div>
+        </div>
+
+        <div style="height:20px;"></div>
+      </div>
+    </section>
+
+    <!-- ── RIGHT PANEL: Medicine Search & Templates ──────────────────────── -->
+    <aside id="right-panel" class="panel">
+
+      <!-- Medicine Search -->
+      <div class="med-search-wrap">
+        <input id="med-search" type="text" placeholder="Ctrl+K  Search medicine…"
+          autocomplete="off" spellcheck="false">
+      </div>
+
+
+      <!-- Alphabetical Medicine Browser -->
+      <div class="right-section" id="med-alpha-section">
+        <div class="rp-section-header">
+          <span>Medicines</span>
+          <button class="btn-add-template" onclick="openAddMedModal()">＋ Add New</button>
+        </div>
+        <div id="med-alpha-list" class="med-alpha-list"></div>
+      </div>
+
+      <!-- Condition Templates -->
+      <div class="right-section">
+        <div class="rp-section-header">
+          <span>Templates</span>
+          <button class="btn-add-template" onclick="openTemplateModal(null)">＋ New</button>
+        </div>
+        <div id="templates-chips" class="tmpl-list">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+
+    </aside>
+  </main>
+</div>
+
+<!-- ── NEW PATIENT MODAL ──────────────────────────────────────────────────── -->
+<div id="modal-new-patient" class="modal-overlay" onclick="if(event.target===this)closeNewPatientModal()">
+  <div class="modal modal-patient">
+    <div class="modal-header">
+      <div class="modal-title">Add New Patient</div>
+      <button class="modal-close" onclick="closeNewPatientModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-new-patient" onsubmit="return false">
+
+        <!-- Name + Phone -->
+        <div class="np-row">
+          <div class="np-field np-field-grow">
+            <label class="np-label">Patient Name <span class="np-req">*</span></label>
+            <input id="np-name" class="np-input" type="text" placeholder="Enter Name"
+              onkeydown="if(event.key==='Enter')saveNewPatient()" autocomplete="off">
+          </div>
+          <div class="np-field np-field-phone">
+            <label class="np-label">Phone Number <span class="np-req">*</span></label>
+            <input id="np-phone" class="np-input" type="tel" placeholder="9xxxxxxxxx" autocomplete="off">
+          </div>
+        </div>
+
+        <!-- Gender + Age + DOB -->
+        <div class="np-row np-row-3">
+          <div class="np-field">
+            <label class="np-label">Gender <span class="np-req">*</span></label>
+            <div class="np-gender-group" id="np-gender-group">
+              <button type="button" class="np-gender-btn active" data-val="Male" onclick="npSetGender('Male')">Male</button>
+              <button type="button" class="np-gender-btn" data-val="Female" onclick="npSetGender('Female')">Female</button>
+            </div>
+            <input type="hidden" id="np-gender" value="Male">
+          </div>
+          <div class="np-field">
+            <label class="np-label">Age (Years)</label>
+            <input id="np-age" class="np-input" type="number" placeholder="35" min="0" max="120">
+          </div>
+          <div class="np-field">
+            <label class="np-label">Date of Birth</label>
+            <input id="np-dob" class="np-input" type="date">
+          </div>
+        </div>
+
+        <!-- City + Address -->
+        <div class="np-row">
+          <div class="np-field" style="flex:1">
+            <label class="np-label">City</label>
+            <input id="np-city" class="np-input" type="text" placeholder="Bengaluru">
+          </div>
+          <div class="np-field" style="flex:2">
+            <label class="np-label">Address</label>
+            <input id="np-address" class="np-input" type="text" placeholder="Area, Street">
+          </div>
+        </div>
+
+      </form>
+    </div>
+    <div class="modal-footer" style="justify-content:center;">
+      <button class="btn-secondary" onclick="closeNewPatientModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveNewPatient()" style="min-width:160px;">Add &amp; Create Rx →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── INVOICE MODAL ──────────────────────────────────────────────────────── -->
+<div id="modal-invoice" class="modal-overlay" onclick="if(event.target===this)closeInvoiceModal()">
+  <div class="modal" style="width:500px;">
+    <div class="modal-header">
+      <div class="modal-title">🧾 Issue Invoice</div>
+      <button class="modal-close" onclick="closeInvoiceModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Patient info (read-only) -->
+      <div id="inv-patient-info" class="inv-patient-bar"></div>
+
+      <!-- Quick-add service chips -->
+      <div class="inv-services-section">
+        <div class="inv-services-label">Quick Add</div>
+        <div class="inv-chips" id="inv-service-chips"></div>
+      </div>
+
+      <!-- Fee rows -->
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th style="width:110px">Amount (₹)</th>
+            <th style="width:32px"></th>
+          </tr>
+        </thead>
+        <tbody id="inv-rows"></tbody>
+      </table>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button class="inv-add-row" style="flex:1" onclick="addInvoiceRow()">＋ Custom Item</button>
+        <button class="inv-add-row inv-add-service-btn" onclick="openAddServiceModal()">⚙ Manage Services</button>
+      </div>
+
+      <!-- Total + Payment -->
+      <div class="inv-footer-row">
+        <div class="inv-total-block">
+          <span class="inv-total-label">Total</span>
+          <span class="inv-total-val" id="inv-total">₹ 0</span>
+        </div>
+        <div class="inv-pay-block">
+          <label class="np-label">Payment Mode</label>
+          <div class="np-gender-group" id="inv-pay-group" style="width:220px;">
+            <button type="button" class="np-gender-btn active" data-val="Cash" onclick="invSetPay('Cash')">Cash</button>
+            <button type="button" class="np-gender-btn" data-val="Card" onclick="invSetPay('Card')">Card</button>
+            <button type="button" class="np-gender-btn" data-val="UPI" onclick="invSetPay('UPI')">UPI</button>
+          </div>
+          <input type="hidden" id="inv-pay-mode" value="Cash">
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeInvoiceModal()">Cancel</button>
+      <button class="btn-primary" onclick="printInvoice()">🖨️ Print Invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MANAGE SERVICES MODAL ─────────────────────────────────────────────── -->
+<div id="modal-services" class="modal-overlay" onclick="if(event.target===this)closeAddServiceModal()">
+  <div class="modal" style="width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">⚙ Manage Services</div>
+      <button class="modal-close" onclick="closeAddServiceModal()">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:65vh;overflow-y:auto;">
+      <div id="svc-list"></div>
+      <div class="svc-add-row">
+        <input id="svc-new-name" class="np-input" type="text" placeholder="Service name" style="flex:2">
+        <input id="svc-new-price" class="np-input" type="number" placeholder="₹ Price" min="0" style="flex:1;text-align:right;">
+        <button class="btn-primary" style="padding:6px 14px;font-size:12px;" onclick="addNewService()">Add</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="closeAddServiceModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TEMPLATE EDITOR MODAL ──────────────────────────────────────────────── -->
+<div id="modal-template" class="modal-overlay" onclick="if(event.target===this)closeTemplateModal()">
+  <div class="modal" style="width:560px;">
+    <div class="modal-header">
+      <div id="tmpl-modal-title" class="modal-title">New Template</div>
+      <button class="modal-close" onclick="closeTemplateModal()">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+
+      <div class="form-grid-2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Template Name *</label>
+          <input id="tmpl-name" class="modal-input" type="text" placeholder="e.g. Knee OA, Rotator Cuff…">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Icon (emoji)</label>
+          <input id="tmpl-icon" class="modal-input" type="text" placeholder="🦵" maxlength="4" style="font-size:20px;text-align:center;">
+        </div>
+      </div>
+
+      <div class="form-grid-2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Diagnosis</label>
+          <input id="tmpl-diagnosis" class="modal-input" type="text" placeholder="Osteoarthritis of Knee">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">ICD-10 Code</label>
+          <input id="tmpl-icd10" class="modal-input" type="text" placeholder="M17.1">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Chief Complaint</label>
+        <textarea id="tmpl-complaints" class="modal-input" rows="2" placeholder="Knee pain, stiffness…"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Examination Findings</label>
+        <textarea id="tmpl-examination" class="modal-input" rows="2" placeholder="Tenderness at…"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Advice (one per line)</label>
+        <textarea id="tmpl-advice" class="modal-input" rows="3" placeholder="Physiotherapy&#10;Quadriceps exercises&#10;Knee brace"></textarea>
+      </div>
+
+      <div class="form-grid-2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Follow-up</label>
+          <input id="tmpl-followup" class="modal-input" type="text" placeholder="4 Weeks">
+        </div>
+      </div>
+
+      <!-- Medicines in template -->
+      <div class="form-group" style="margin-bottom:4px;">
+        <label class="form-label">Medicines</label>
+        <div id="tmpl-med-list" class="tmpl-med-list"></div>
+      </div>
+
+      <!-- Add medicine to template -->
+      <div class="tmpl-med-search-wrap">
+        <input id="tmpl-med-search" class="modal-input" type="text"
+          placeholder="Search to add medicine…" autocomplete="off" oninput="tmplSearchMeds(this.value)">
+        <div id="tmpl-med-results" class="tmpl-med-results" style="display:none;"></div>
+      </div>
+
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;">
+      <button id="tmpl-delete-btn" class="danger-btn" style="display:none;" onclick="deleteCurrentTemplate()">🗑 Delete</button>
+      <div style="display:flex;gap:8px;margin-left:auto;">
+        <button class="btn-secondary" onclick="closeTemplateModal()">Cancel</button>
+        <button class="btn-primary" onclick="saveTemplate()">Save Template</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Scripts (order matters) -->
+<script src="js/medicines.js"></script>
+<script src="js/templates.js"></script>
+<script src="js/db.js"></script>
+<script src="js/app.js"></script>
+
+<script>
+function toggleSection(header) {
+  const content = header.nextElementSibling;
+  const isHidden = content.style.display === 'none';
+  content.style.display = isHidden ? '' : 'none';
+}
+
+// Register service worker for offline support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+
+<!-- Add New Medicine Modal -->
+<div id="modal-add-med" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddMedModal()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3>Add New Medicine</h3>
+      <button class="modal-close" onclick="closeAddMedModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1">
+          <label class="modal-label">Brand Name *</label>
+          <input id="nm-brand" class="modal-input" placeholder="e.g. Calcirol" autocomplete="off">
+        </div>
+        <div style="width:90px">
+          <label class="modal-label">Type</label>
+          <select id="nm-type" class="modal-input">
+            <option>TAB</option><option>CAP</option><option>SYP</option>
+            <option>INJ</option><option>GEL</option><option>SPRAY</option>
+            <option>DROPS</option><option>PWD</option><option>CREAM</option><option>OINT</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="modal-label">Composition / Content</label>
+        <input id="nm-content" class="modal-input" placeholder="e.g. Calcium + Vitamin D3">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1">
+          <label class="modal-label">Default Dosage</label>
+          <select id="nm-dosage" class="modal-input">
+            <option>1-0-0</option><option>0-1-0</option><option>0-0-1</option>
+            <option>1-1-0</option><option>1-0-1</option><option>0-1-1</option>
+            <option>1-1-1</option><option>1-1-1-1</option><option>SOS</option><option>As Directed</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label class="modal-label">Administration</label>
+          <select id="nm-admin" class="modal-input">
+            <option>After Food</option><option>Before Food</option><option>Empty Stomach</option>
+            <option>With Food</option><option>At Bedtime</option><option>With Milk</option><option>As Directed</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1">
+          <label class="modal-label">Frequency</label>
+          <select id="nm-freq" class="modal-input">
+            <option>Once Daily</option><option>Twice Daily</option><option>Thrice Daily</option>
+            <option>Four Times Daily</option><option>Weekly</option><option>Alternate Days</option>
+            <option>SOS</option><option>As Directed</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label class="modal-label">Duration</label>
+          <select id="nm-dur" class="modal-input">
+            <option>5 Days</option><option>7 Days</option><option>10 Days</option>
+            <option>14 Days</option><option>1 Month</option><option>2 Months</option>
+            <option>3 Months</option><option>6 Months</option><option>As Directed</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button class="btn-primary" style="flex:1" onclick="saveNewMed()">Save to Medicine List</button>
+        <button class="btn-secondary" onclick="closeAddMedModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async></script>
+
+<!-- Backup Modal -->
+<div id="modal-backup" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeBackupModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h3>☁ Backup &amp; Restore</h3>
+      <button class="modal-close" onclick="closeBackupModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:16px;">
+
+      <!-- Local Export / Import -->
+      <div class="backup-section">
+        <div class="backup-section-title">Local Backup</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-primary" onclick="exportBackup()" style="flex:1">
+            ↓ Export JSON
+          </button>
+          <label class="btn-secondary" style="flex:1;text-align:center;cursor:pointer;">
+            ↑ Import JSON
+            <input type="file" accept=".json" style="display:none" onchange="importBackup(this)">
+          </label>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">
+          Exports all patients, visits &amp; templates as a single .json file.
+        </div>
+      </div>
+
+      <!-- Google Drive -->
+      <div class="backup-section">
+        <div class="backup-section-title">Google Drive Auto-Backup</div>
+        <div id="gdrive-setup" style="display:none">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">
+            Enter your Google OAuth Client ID to enable Drive backup.<br>
+            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--blue);font-size:11px;">
+              Get Client ID from Google Cloud Console →
+            </a>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <input id="gdrive-client-id" class="modal-input" placeholder="xxxxxxx.apps.googleusercontent.com"
+              style="flex:1;font-size:11px;" value="">
+            <button class="btn-primary" onclick="gdriveSaveClientId()">Save</button>
+          </div>
+        </div>
+        <div id="gdrive-auth-section">
+          <div id="gdrive-status" style="font-size:12px;color:var(--text3);margin-bottom:8px;">Not connected</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="gdrive-connect-btn" class="btn-primary" onclick="gdriveConnect()" style="flex:1">
+              Connect Google Drive
+            </button>
+            <button id="gdrive-disconnect-btn" class="btn-secondary" onclick="gdriveDisconnect()" style="display:none;flex:1">
+              Disconnect
+            </button>
+          </div>
+          <div id="gdrive-auto-status" style="font-size:11px;color:var(--text3);margin-top:8px;"></div>
+        </div>
+        <div style="margin-top:8px;">
+          <button class="backup-setup-toggle" onclick="document.getElementById('gdrive-setup').style.display=document.getElementById('gdrive-setup').style.display==='none'?'block':'none'">
+            ⚙ Setup / Change Client ID
+          </button>
+        </div>
+      </div>
+
+      <!-- PDF Prescriptions Folder -->
+      <div class="backup-section">
+        <div class="backup-section-title">Prescription PDF Folder</div>
+        <div id="pdf-folder-status" style="font-size:12px;color:var(--text3);margin-bottom:8px;">No folder selected</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-primary" onclick="selectPdfFolder()" style="flex:1">📁 Select Folder</button>
+          <button class="btn-secondary" onclick="syncPdfsToDrive()" id="btn-sync-pdfs" style="flex:1;display:none">☁ Sync to Drive</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;">
+          Prescriptions auto-save as PDFs on each print. Organised as <code>PatientID / Date.pdf</code>
+        </div>
+      </div>
+
+      <!-- Last backup info -->
+      <div id="backup-last-info" style="font-size:11px;color:var(--text3);text-align:center;padding-top:4px;border-top:1px solid var(--border);">
+        No backup yet this session
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
