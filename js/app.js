@@ -250,6 +250,9 @@ function updatePatientHeader() {
   // Show consultation form, hide empty state
   document.getElementById('center-empty').style.display = 'none';
   document.getElementById('consultation-form').style.display = 'block';
+  // Show edit button
+  const editBtn = document.getElementById('btn-edit-patient');
+  if (editBtn) editBtn.style.display = '';
 }
 
 async function startNewVisit(patient) {
@@ -294,7 +297,13 @@ function openNewPatientModal() {
 
 function closeNewPatientModal() {
   document.getElementById('modal-new-patient').classList.remove('open');
+  document.getElementById('modal-new-patient').style.display = 'none';
   document.getElementById('form-new-patient').reset();
+  // Reset to "new patient" mode
+  const title = document.querySelector('#modal-new-patient .modal-header h3');
+  if (title) title.textContent = '+ New Patient';
+  const saveBtn = document.querySelector('#modal-new-patient .btn-primary');
+  if (saveBtn) { saveBtn.textContent = 'Register Patient'; saveBtn.onclick = saveNewPatient; }
 }
 
 function npSetGender(val) {
@@ -302,28 +311,90 @@ function npSetGender(val) {
   document.getElementById('np-gender').value = val;
 }
 
-async function saveNewPatient() {
-  const name = document.getElementById('np-name').value.trim();
-  const phone = document.getElementById('np-phone').value.trim();
-  const gender = document.getElementById('np-gender').value;
-  const dob = document.getElementById('np-dob').value;
-  const age = document.getElementById('np-age').value;
-  const city = document.getElementById('np-city').value.trim();
-  const address = document.getElementById('np-address').value.trim();
+function calcBMI() {
+  const h = parseFloat(document.getElementById('np-height')?.value);
+  const w = parseFloat(document.getElementById('np-weight')?.value);
+  const el = document.getElementById('np-bmi');
+  if (!el) return;
+  if (h > 0 && w > 0) {
+    const bmi = (w / ((h / 100) ** 2)).toFixed(1);
+    const cat = bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese';
+    el.value = `${bmi} (${cat})`;
+  } else {
+    el.value = '';
+  }
+}
 
-  if (!name) { toast('Patient name is required', 'error'); return; }
-
-  const id = await DB.generatePatientId(phone);
-  const patient = {
-    id, name, phone, gender, dob, age: age || calcAge(dob),
-    city, address, createdAt: Date.now(), lastVisit: Date.now()
+function gatherPatientFormData() {
+  return {
+    name:       document.getElementById('np-name').value.trim(),
+    phone:      document.getElementById('np-phone').value.trim(),
+    gender:     document.getElementById('np-gender').value,
+    dob:        document.getElementById('np-dob').value,
+    age:        document.getElementById('np-age').value,
+    city:       document.getElementById('np-city').value.trim(),
+    address:    document.getElementById('np-address').value.trim(),
+    whatsapp:   document.getElementById('np-whatsapp')?.value.trim() || '',
+    email:      document.getElementById('np-email')?.value.trim() || '',
+    height:     document.getElementById('np-height')?.value || '',
+    weight:     document.getElementById('np-weight')?.value || '',
+    bmi:        document.getElementById('np-bmi')?.value || '',
+    occupation: document.getElementById('np-occupation')?.value.trim() || '',
+    sport:      document.getElementById('np-sport')?.value.trim() || '',
+    dominant:   document.getElementById('np-dominant')?.value || '',
+    blood:      document.getElementById('np-blood')?.value || '',
+    insurance:  document.getElementById('np-insurance')?.value.trim() || '',
+    referral:   document.getElementById('np-referral')?.value.trim() || '',
   };
+}
 
+function fillPatientForm(p) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('np-name', p.name); set('np-phone', p.phone);
+  set('np-dob', p.dob); set('np-age', p.age);
+  set('np-city', p.city); set('np-address', p.address);
+  set('np-whatsapp', p.whatsapp); set('np-email', p.email);
+  set('np-height', p.height); set('np-weight', p.weight);
+  set('np-occupation', p.occupation); set('np-sport', p.sport);
+  set('np-dominant', p.dominant); set('np-blood', p.blood);
+  set('np-insurance', p.insurance); set('np-referral', p.referral);
+  npSetGender(p.gender || 'Male');
+  calcBMI();
+}
+
+async function saveNewPatient() {
+  const data = gatherPatientFormData();
+  if (!data.name) { toast('Patient name is required', 'error'); return; }
+  const id = await DB.generatePatientId(data.phone);
+  const patient = { id, ...data, age: data.age || calcAge(data.dob), createdAt: Date.now(), lastVisit: Date.now() };
   await DB.savePatient(patient);
   State.recentPatients.unshift(patient);
   closeNewPatientModal();
   await loadPatient(id);
-  toast(`Patient ${name} registered as ${id}`);
+  toast(`Patient ${data.name} registered as ${id}`);
+}
+
+function openEditPatientModal() {
+  const p = State.currentPatient;
+  if (!p) return;
+  fillPatientForm(p);
+  const title = document.querySelector('#modal-new-patient .modal-title');
+  if (title) title.textContent = '✏️ Edit Patient';
+  const saveBtn = document.querySelector('#modal-new-patient .btn-primary');
+  if (saveBtn) { saveBtn.textContent = 'Update Patient'; saveBtn.onclick = updatePatient; }
+  document.getElementById('modal-new-patient').style.display = 'flex';
+}
+
+async function updatePatient() {
+  const p = State.currentPatient;
+  if (!p) return;
+  const data = gatherPatientFormData();
+  Object.assign(p, data, { age: data.age || calcAge(data.dob) });
+  await DB.savePatient(p);
+  closeNewPatientModal();
+  updatePatientHeader();
+  await initPatientPanel();
+  toast('Patient details updated');
 }
 
 // ─── Consultation Form ────────────────────────────────────────────────────────
@@ -940,6 +1011,11 @@ function loadServices() {
 
 function saveServices(services) {
   localStorage.setItem('aarna_services', JSON.stringify(services));
+}
+
+function openScorePicker() {
+  const p = document.getElementById('score-picker-panel');
+  if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
 }
 
 function openInvoiceModal() {
@@ -1650,6 +1726,10 @@ async function init() {
   await DB.init();
   await initPatientPanel();
   await refreshRecycleBin();
+
+  // Phase 1 – Ortho upgrades
+  if (typeof renderBodySelector === 'function') renderBodySelector();
+  if (typeof initDiagSearch === 'function') initDiagSearch();
 
   // Patient search
   document.getElementById('patient-search').addEventListener('input', e => {

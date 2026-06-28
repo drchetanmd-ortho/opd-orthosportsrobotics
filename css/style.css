@@ -771,4 +771,89 @@ input.modal-input:focus, select.modal-input:focus {
   /* Left tabs larger */
   .left-tab { padding: 10px 4px; font-size: 12px; }
   .btn-new-patient-left { padding: 6px 12px; font-size: 13px; }
+  .body-parts-grid { grid-template-columns: repeat(3, 1fr); }
+  .bep-actions { flex-wrap: wrap; }
+  .header-actions { flex-wrap: wrap; gap: 4px; }
+  .action-btn { padding: 5px 8px; font-size: 11px; }
 }
+
+/* ── Diagnosis Smart Search ──────────────────────────────────────────────── */
+.diag-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 500;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.14);
+  max-height: 320px; overflow-y: auto; display: none;
+}
+.diag-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.diag-item:hover { background: var(--blue-light, #eff6ff); }
+.diag-label { flex: 1; font-size: 13px; font-weight: 500; color: var(--text1); }
+.diag-icd { font-size: 10px; color: var(--text3); background: var(--bg); padding: 2px 6px; border-radius: 4px; }
+.diag-body { font-size: 10px; color: var(--blue); text-transform: capitalize; }
+
+/* ── Body Part Selector ──────────────────────────────────────────────────── */
+.body-selector-section .section-content { padding: 10px; }
+.body-selector-title { font-size: 11px; color: var(--text3); margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.body-parts-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+}
+.body-part-btn {
+  padding: 7px 4px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); font-size: 12px; font-weight: 500; cursor: pointer;
+  color: var(--text2); transition: all .15s; text-align: center;
+}
+.body-part-btn:hover { border-color: var(--blue); color: var(--blue); background: #eff6ff; }
+.body-part-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+.body-exam-panel {
+  background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px;
+  margin: 0 10px 10px; padding: 12px; display: none;
+}
+.bep-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.bep-title { font-size: 13px; font-weight: 700; color: var(--blue); }
+.bep-close { background: none; border: none; font-size: 16px; cursor: pointer; color: var(--text3); padding: 0; }
+.bep-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.bep-btn {
+  padding: 5px 10px; border: 1px solid var(--blue); border-radius: 6px;
+  background: #fff; color: var(--blue); font-size: 12px; cursor: pointer; font-weight: 500;
+}
+.bep-btn:hover { background: var(--blue); color: #fff; }
+.bep-btn-primary { background: var(--blue); color: #fff; }
+.bep-btn-primary:hover { background: #1558d6; }
+.bep-tests-label { font-size: 11px; color: var(--text3); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; }
+.bep-tests-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.bep-test-btn {
+  padding: 3px 9px; border: 1px solid #93c5fd; border-radius: 12px;
+  background: #fff; font-size: 11px; cursor: pointer; color: #1e40af;
+}
+.bep-test-btn:hover { background: #dbeafe; }
+.bep-diag-hint { margin-top: 10px; font-size: 11px; color: #0369a1; font-style: italic; }
+
+/* ── Outcome Scores ──────────────────────────────────────────────────────── */
+.btn-score { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+.btn-score:hover { background: #6d28d9; }
+.score-pick-btn {
+  width: 100%; padding: 10px 14px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg); cursor: pointer;
+  font-size: 13px; font-weight: 500; text-align: left; color: var(--text1);
+  transition: all .15s;
+}
+.score-pick-btn:hover { border-color: var(--blue); color: var(--blue); background: #eff6ff; }
+.ocs-question { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.ocs-q-text { font-size: 13px; font-weight: 500; color: var(--text1); margin-bottom: 8px; }
+.ocs-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ocs-opt {
+  padding: 5px 11px; border: 1.5px solid var(--border); border-radius: 20px;
+  background: var(--bg); font-size: 11.5px; cursor: pointer; color: var(--text2);
+  transition: all .15s;
+}
+.ocs-opt:hover { border-color: var(--blue); color: var(--blue); }
+.ocs-opt.selected { background: var(--blue); color: #fff; border-color: var(--blue); font-weight: 600; }
+.ocs-interpret { color: var(--green); }
+
+/* ── Enhanced Registration ───────────────────────────────────────────────── */
+.np-row-3 { display: flex; gap: 10px; }
+.np-row-3 .np-field { flex: 1; }
