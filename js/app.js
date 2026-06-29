@@ -1242,7 +1242,11 @@ async function shareInvoice() {
   const p = State.currentPatient;
   if (!p) { toast('No patient selected', 'error'); return; }
   const items = getInvoiceItems();
-  if (!items.length) { toast('Add at least one item', 'error'); return; }
+  if (!items.length) { toast('Add at least one item first', 'error'); return; }
+
+  // Capture all data NOW before modal might close
+  const invHtml = buildInvoiceHtml();
+  if (!invHtml) { toast('Could not build invoice', 'error'); return; }
 
   const phone = (p.whatsapp || p.phone || '').replace(/\D/g, '');
   const patientName = p.name || 'Patient';
@@ -1250,97 +1254,22 @@ async function shareInvoice() {
   const date = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
   const msgText = `Dear ${patientName},\n\nYour invoice of ₹${total.toLocaleString('en-IN')} from Aarna Orthopaedic Clinic dated ${date}.\n\nThank you for visiting.\nDr Chetan M Dojode`;
 
-  // Show share panel immediately
   showInvoiceSharePanel(phone, msgText, patientName);
 
-  // Generate invoice PDF in background
-  generateInvoicePdf(patientName, date, msgText);
+  // Generate PDF from already-captured HTML — no DOM dependency
+  generateInvoicePdfFromHtml(invHtml, patientName, date, msgText);
 }
 
-async function generateInvoicePdf(patientName, date, msgText) {
-  const dlBtn = document.getElementById('inv-share-pdf-btn');
-  if (dlBtn) dlBtn.textContent = '⏳ Generating PDF…';
+async function generateInvoicePdfFromHtml(html, patientName, date, msgText) {
   try {
-    const p = State.currentPatient;
-    const items = getInvoiceItems();
-    const payMode = document.getElementById('inv-pay-mode').value;
-    const total = items.reduce((s, i) => s + i.amt, 0);
-    const age = p.age || calcAge(p.dob) || '?';
-    const now = new Date();
-    const invoiceNo = `INV-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${Math.floor(Math.random()*900)+100}`;
-
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>
-  * { margin:0;padding:0;box-sizing:border-box; }
-  body { font-family:Arial,sans-serif;font-size:12px;color:#000; }
-  .page { width:210mm;min-height:148mm;padding:12mm 14mm; }
-  .inv-header { display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px; }
-  .clinic-name { font-size:18px;font-weight:900; }
-  .clinic-sub { font-size:10px;color:#444;margin-top:3px; }
-  .inv-label { font-size:18px;font-weight:700;color:#1a6ef5;text-align:right; }
-  .inv-no { font-size:10px;color:#666;text-align:right;margin-top:2px; }
-  .patient-section { display:flex;justify-content:space-between;margin-bottom:14px; }
-  .info-block p { font-size:11px;line-height:1.7; }
-  table { width:100%;border-collapse:collapse;margin-bottom:12px; }
-  th { background:#f5f5f5;text-align:left;padding:6px 10px;font-size:11px;font-weight:700;border:1px solid #ddd; }
-  td { padding:6px 10px;border:1px solid #ddd;font-size:12px; }
-  .amt { text-align:right; }
-  .total-row td { font-weight:700;font-size:13px;background:#f5f5f5; }
-  .footer-note { font-size:10px;color:#666;margin-top:8px;text-align:center;border-top:1px solid #ddd;padding-top:8px; }
-</style></head><body>
-<div class="page">
-  <div class="inv-header">
-    <div>
-      <div class="clinic-name">Aarna Orthopaedic Clinic</div>
-      <div class="clinic-sub">Dr Chetan M Dojode · MS (Orth) · ${DOCTOR.phone}<br>${DOCTOR.clinics[0].address.replace(/\n/g,', ')}</div>
-    </div>
-    <div>
-      <div class="inv-label">INVOICE</div>
-      <div class="inv-no">${invoiceNo}</div>
-      <div class="inv-no">Date: ${formatDate(now)}</div>
-    </div>
-  </div>
-  <div class="patient-section">
-    <div class="info-block">
-      <p><strong>Patient:</strong> ${p.name}</p>
-      <p><strong>ID:</strong> ${p.id} &nbsp; <strong>Age/Sex:</strong> ${age}y / ${p.gender||''}</p>
-      <p><strong>Phone:</strong> ${p.phone||'—'}</p>
-    </div>
-    <div class="info-block" style="text-align:right">
-      <p><strong>Payment Mode:</strong> ${payMode}</p>
-    </div>
-  </div>
-  <table>
-    <thead><tr><th>#</th><th>Description</th><th class="amt">Amount (₹)</th></tr></thead>
-    <tbody>
-      ${items.map((it,i)=>`<tr><td>${i+1}</td><td>${it.desc}</td><td class="amt">${it.amt>0?it.amt.toLocaleString('en-IN'):'—'}</td></tr>`).join('')}
-      <tr class="total-row"><td colspan="2" style="text-align:right">Total</td><td class="amt">₹ ${total.toLocaleString('en-IN')}</td></tr>
-    </tbody>
-  </table>
-  <div class="footer-note">Thank you for visiting Aarna Orthopaedic Clinic · Computer-generated invoice</div>
-</div></body></html>`;
-
-    const { jsPDF } = window.jspdf;
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:297mm;height:210mm;';
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
-    await new Promise(r => setTimeout(r, 800));
-    const canvas = await html2canvas(iframe.contentDocument.body, { scale:2, useCORS:true, backgroundColor:'#fff' });
-    document.body.removeChild(iframe);
-    const pdf = new jsPDF({ orientation:'landscape', unit:'mm', format:'a5' });
-    pdf.addImage(canvas.toDataURL('image/jpeg',0.92), 'JPEG', 0, 0, 210, 148);
-    const blob = pdf.output('blob');
-
+    const blob = await renderHtmlToPdfBlobA5(html);
     const fileName = `Invoice_${patientName.replace(/\s+/g,'_')}_${date.replace(/\s/g,'-')}.pdf`;
     const file = new File([blob], fileName, { type:'application/pdf' });
     const blobUrl = URL.createObjectURL(blob);
 
-    const dlBtnEl = document.getElementById('inv-share-pdf-btn');
-    if (dlBtnEl) {
-      dlBtnEl.outerHTML = `<a id="inv-share-pdf-btn" class="share-btn share-pdf" href="${blobUrl}" download="${fileName}">
+    const dlBtn = document.getElementById('inv-share-pdf-btn');
+    if (dlBtn) {
+      dlBtn.outerHTML = `<a id="inv-share-pdf-btn" class="share-btn share-pdf" href="${blobUrl}" download="${fileName}">
         <span>📄</span> Download Invoice PDF
       </a>`;
     }
@@ -1358,7 +1287,7 @@ async function generateInvoicePdf(patientName, date, msgText) {
   } catch(e) {
     console.error('Invoice PDF error', e);
     const btn = document.getElementById('inv-share-pdf-btn');
-    if (btn) btn.textContent = '⚠️ PDF generation failed';
+    if (btn) btn.textContent = '⚠️ PDF failed — try Download below';
   }
 }
 
