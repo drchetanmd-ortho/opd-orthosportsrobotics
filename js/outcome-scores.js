@@ -143,7 +143,8 @@ function calcOutcomeScore() {
   // Normalize to range
   const maxRaw = score.questions.reduce((a, q) => a + (q.opts.length - 1), 0);
   let normalized = Math.round((total / maxRaw) * (score.name.includes('VAS') ? 10 : score.name.includes('KOOS') || score.name.includes('IKDC') || score.name.includes('Constant') ? 100 : 48));
-  if (score.name.includes('VAS')) normalized = _scoreAnswers[0];
+  // VAS: stored answer is reversed (opts.length-1-optIdx); un-reverse to get actual pain score
+  if (score.name.includes('VAS')) normalized = maxRaw - _scoreAnswers[0];
   const interpretation = score.interpret(normalized);
   const resultEl = document.getElementById('ocs-result');
   resultEl.innerHTML = `Score: <strong>${normalized}</strong> / ${score.range.split('(')[0].trim().split('–')[1]} &nbsp;·&nbsp; <span class="ocs-interpret">${interpretation}</span>`;
@@ -155,18 +156,15 @@ function saveOutcomeScore() {
   const total = _scoreAnswers.reduce((a, b) => a + b, 0);
   const maxRaw = score.questions.reduce((a, q) => a + (q.opts.length - 1), 0);
   let normalized = Math.round((total / maxRaw) * (score.name.includes('VAS') ? 10 : score.name.includes('KOOS') || score.name.includes('IKDC') || score.name.includes('Constant') ? 100 : 48));
-  if (score.name.includes('VAS')) normalized = _scoreAnswers[0];
+  if (score.name.includes('VAS')) normalized = maxRaw - _scoreAnswers[0];
   const interpretation = score.interpret(normalized);
 
-  // Append to visit notes
+  // Append to visit notes only (not examination — score text prints on prescriptions)
   const notesEl = document.getElementById('field-notes');
   const entry = `[${score.name}: ${normalized} — ${interpretation} — ${new Date().toLocaleDateString('en-IN')}]`;
   if (notesEl) notesEl.value = (notesEl.value ? notesEl.value + '\n' : '') + entry;
 
-  // Also add to examination field
-  const examEl = document.getElementById('field-examination');
-  if (examEl) examEl.value = (examEl.value ? examEl.value + '\n' : '') + entry;
-
+  if (notesEl) updateVisitField('notes', notesEl.value);
   closeOutcomeScoreModal();
   toast(`${score.name}: ${normalized} (${interpretation}) saved`);
 }
