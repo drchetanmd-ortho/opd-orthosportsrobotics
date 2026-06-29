@@ -290,6 +290,35 @@ async function startNewVisit(patient) {
 }
 
 // ─── New Patient Modal ────────────────────────────────────────────────────────
+async function checkExistingPatientByPhone(phone) {
+  const alert = document.getElementById('np-existing-alert');
+  if (!alert) return;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8) { alert.style.display = 'none'; return; }
+
+  const all = await DB.getAllPatients();
+  const match = all.find(p => (p.phone || '').replace(/\D/g,'').endsWith(digits) ||
+                               (p.whatsapp || '').replace(/\D/g,'').endsWith(digits));
+  if (!match) { alert.style.display = 'none'; return; }
+
+  alert.style.display = 'block';
+  alert.innerHTML = `⚠️ <strong>${match.name}</strong> already registered (${match.id}) ·
+    <a href="#" style="color:#b45309;font-weight:600;"
+      onclick="event.preventDefault();closeNewPatientModal();loadPatientById('${match.id}')">
+      Open as Follow-up →
+    </a>`;
+}
+
+async function loadPatientById(id) {
+  const p = await DB.getPatient(id);
+  if (!p) { toast('Patient not found', 'error'); return; }
+  selectPatient(p);
+  if (typeof switchMobilePanel === 'function' && isMobile()) {
+    switchMobilePanel('center-panel', document.querySelector('.mob-nav-btn[data-panel="center-panel"]'));
+  }
+  toast(`Opened ${p.name} — add today's visit`);
+}
+
 function openNewPatientModal() {
   // Reset gender toggle to Male
   document.querySelectorAll('.np-gender-btn').forEach(b => b.classList.remove('active'));
@@ -1442,81 +1471,34 @@ async function sharePrescription() {
   const date = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
   const msgText = `Dear ${patientName},\n\nYour prescription from Dr Chetan M Dojode dated ${date}${diagnosis ? '\nDiagnosis: ' + diagnosis : ''}.\n\nAarna Orthopaedic & SportsMed Clinic\nPh: +91 ${DOCTOR.phone || ''}`;
 
-  // Show panel immediately — don't wait for PDF
-  const hasInvoice = !!buildInvoiceHtml();
-  showSharePanel(phone, msgText, patientName, hasInvoice);
-
-  // Generate PDFs in background
-  generateAndAttachPdf(patientName, date, msgText, hasInvoice);
+  showSharePanel(phone, msgText, patientName);
+  generateAndAttachPdf(patientName, date, msgText);
 }
 
-async function generateAndAttachPdf(patientName, date, msgText, hasInvoice) {
-  const btn = document.getElementById('share-pdf-btn');
-  if (btn) btn.textContent = '⏳ Generating PDF…';
+async function generateAndAttachPdf(patientName, date, msgText) {
   try {
     const rxHtml = await buildPrescriptionHtml();
-    if (!rxHtml) return;
-    const invHtml = hasInvoice ? buildInvoiceHtml() : null;
+    if (!rxHtml) { document.getElementById('share-pdf-btn').textContent = '⚠️ No patient data'; return; }
+    const blob = await renderHtmlToPdfBlob(rxHtml);
+    const fileName = `Rx_${patientName.replace(/\s+/g,'_')}_${date.replace(/\s/g,'-')}.pdf`;
+    const file = new File([blob], fileName, { type:'application/pdf' });
+    const blobUrl = URL.createObjectURL(blob);
 
-    // Combined PDF (prescription + invoice as page 2)
-    const combinedBlob = invHtml ? await renderCombinedPdfBlob(rxHtml, invHtml) : await renderHtmlToPdfBlob(rxHtml);
-    const combinedFileName = `Rx_${patientName.replace(/\s+/g,'_')}_${date.replace(/\s/g,'-')}.pdf`;
-    const blob = combinedBlob;
-    const fileName = combinedFileName;
-
-    // Update combined download button
     const dlBtn = document.getElementById('share-pdf-btn');
     if (dlBtn) {
       dlBtn.outerHTML = `<a id="share-pdf-btn" class="share-btn share-pdf" href="${blobUrl}" download="${fileName}">
-        <span>📄</span> Download PDF${invHtml ? ' (Rx + Invoice)' : ''}
+        <span>📄</span> Download Prescription PDF
       </a>`;
     }
 
-    // If invoice exists, also add separate invoice download
-    if (invHtml) {
-      const invBlob = await renderHtmlToPdfBlobA5(invHtml);
-      const invUrl = URL.createObjectURL(invBlob);
-      const invFileName = `Invoice_${patientName.replace(/\s+/g,'_')}_${date.replace(/\s/g,'-')}.pdf`;
-      const invFile = new File([invBlob], invFileName, { type:'application/pdf' });
-      const invContainer = document.getElementById('share-inv-sep');
-      if (invContainer) {
-        invContainer.outerHTML = `<div class="share-divider">— invoice separately —</div>
-          <a id="share-inv-sep" class="share-btn" style="background:#7c3aed;color:#fff;" href="${invUrl}" download="${invFileName}">
-            <span>🧾</span> Download Invoice PDF (separate)
-          </a>`;
-      }
-      // Native share: offer both files together if supported
-      if (navigator.share && navigator.canShare) {
-        const nativeBtn = document.getElementById('share-native-btn');
-        if (nativeBtn) {
-          const canShareBoth = navigator.canShare({ files:[file, invFile] });
-          const canShareRx   = navigator.canShare({ files:[file] });
-          if (canShareBoth || canShareRx) {
-            nativeBtn.style.display = 'flex';
-            nativeBtn.onclick = async () => {
-              try {
-                if (canShareBoth)
-                  await navigator.share({ files:[file, invFile], title:`Rx + Invoice – ${patientName}`, text:msgText });
-                else
-                  await navigator.share({ files:[file], title:`Prescription – ${patientName}`, text:msgText });
-              } catch(e) { if (e.name !== 'AbortError') toast('Share failed','error'); }
-            };
-            nativeBtn.querySelector('span').nextSibling.textContent = canShareBoth
-              ? ' Share Rx + Invoice (WhatsApp / any app)' : ' Share Prescription PDF';
-          }
-        }
-      }
-    } else {
-      // No invoice — native share for Rx only
-      if (navigator.share && navigator.canShare && navigator.canShare({ files:[file] })) {
-        const nativeBtn = document.getElementById('share-native-btn');
-        if (nativeBtn) {
-          nativeBtn.style.display = 'flex';
-          nativeBtn.onclick = async () => {
-            try { await navigator.share({ files:[file], title:`Prescription – ${patientName}`, text:msgText }); }
-            catch(e) { if (e.name !== 'AbortError') toast('Share failed','error'); }
-          };
-        }
+    if (navigator.share && navigator.canShare && navigator.canShare({ files:[file] })) {
+      const nativeBtn = document.getElementById('share-native-btn');
+      if (nativeBtn) {
+        nativeBtn.style.display = 'flex';
+        nativeBtn.onclick = async () => {
+          try { await navigator.share({ files:[file], title:`Prescription – ${patientName}`, text:msgText }); }
+          catch(e) { if (e.name !== 'AbortError') toast('Share failed','error'); }
+        };
       }
     }
   } catch(e) {
@@ -1526,7 +1508,7 @@ async function generateAndAttachPdf(patientName, date, msgText, hasInvoice) {
   }
 }
 
-function showSharePanel(phone, msgText, patientName, hasInvoice) {
+function showSharePanel(phone, msgText, patientName) {
   const encoded = encodeURIComponent(msgText);
   const waLink  = phone ? `https://wa.me/91${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
   const smsLink = `sms:${phone ? '+91'+phone : ''}?body=${encoded}`;
@@ -1550,7 +1532,6 @@ function showSharePanel(phone, msgText, patientName, hasInvoice) {
       <div id="share-pdf-btn" class="share-btn share-pdf" style="opacity:.6;pointer-events:none">
         <span>📄</span> ⏳ Generating PDF…
       </div>
-      ${hasInvoice ? `<div id="share-inv-sep" class="share-btn" style="opacity:.6;pointer-events:none"><span>🧾</span> ⏳ Preparing Invoice PDF…</div>` : ''}
       <div class="share-divider">— or send text message —</div>
       <a class="share-btn share-wa" href="${waLink}" target="_blank" rel="noopener">
         <span>📱</span> WhatsApp${phone ? ' · ' + phone : ' (no number saved)'}
@@ -1939,8 +1920,23 @@ function purgeRemovedMedicines() {
   });
 }
 
+let _logoDataUrl = null;
+async function getLogoDataUrl() {
+  if (_logoDataUrl) return _logoDataUrl;
+  try {
+    const resp = await fetch('assets/logo.png');
+    const blob = await resp.blob();
+    return new Promise(res => {
+      const r = new FileReader();
+      r.onload = e => { _logoDataUrl = e.target.result; res(_logoDataUrl); };
+      r.readAsDataURL(blob);
+    });
+  } catch(e) { return ''; }
+}
+
 async function init() {
   purgeRemovedMedicines();
+  getLogoDataUrl(); // pre-cache logo for PDF generation
   initMobilePanels();
   // Render built-in templates immediately – no DB needed
   TmplState.allTemplates = Object.entries(CONDITION_TEMPLATES).map(([key, t], i) => ({
@@ -2256,12 +2252,12 @@ function updatePdfFolderUI() {
 }
 
 async function buildPrescriptionHtml() {
-  // Re-use existing printPrescription HTML builder but return html string instead of opening window
   const p = State.currentPatient;
   const v = State.currentVisit;
   if (!p || !v) return null;
   const age = p.age || calcAge(p.dob) || '?';
   const now = new Date();
+  const logoSrc = await getLogoDataUrl();
 
   const medRows = State.medicines.map((item, i) => {
     const m = item.med;
@@ -2307,7 +2303,7 @@ ${v.followUp ? `.followup-box { margin-top:10px; border:1px dashed #999; padding
     <div class="doctor-title">${DOCTOR.title} – ${DOCTOR.subtitle}</div>
     <div class="doctor-quals">${DOCTOR.qualifications}<br>${DOCTOR.fellowships.join('<br>')}<br>${DOCTOR.kmc} | Ph: ${DOCTOR.phone}</div>
   </div>
-  <img src="${window.location.href.replace(/[^/]*$/, '')}assets/logo.png" style="height:60px;object-fit:contain;">
+  ${logoSrc ? `<img src="${logoSrc}" style="height:60px;object-fit:contain;">` : ''}
 </div>
 <div class="patient-bar">
   <span>${p.id}: ${p.name} (${age}y, ${p.gender || 'M'}) &nbsp; ${p.phone || ''}</span>
@@ -2460,21 +2456,32 @@ async function savePrescriptionPdf() {
     const rxHtml = await buildPrescriptionHtml();
     if (!rxHtml) return;
 
-    // If invoice items exist, save combined PDF (prescription + invoice as last page)
-    const invHtml = buildInvoiceHtml();
-    const pdfBlob = invHtml
-      ? await renderCombinedPdfBlob(rxHtml, invHtml)
-      : await renderHtmlToPdfBlob(rxHtml);
-
+    // Save prescription PDF
+    const pdfBlob = await renderHtmlToPdfBlob(rxHtml);
     const fileHandle = await patientDir.getFileHandle(fileName, { create: true });
     const writable = await fileHandle.createWritable();
     await writable.write(pdfBlob);
     await writable.close();
-
     PdfDriveQueue.push({ patientId, fileName, blob: pdfBlob });
-    if (GDrive.token) syncPdfsToDrive();
 
-    toast('PDF saved: ' + patientId + '/' + fileName + (invHtml ? ' (with invoice)' : ''));
+    // Save invoice as separate PDF if items exist
+    const invHtml = buildInvoiceHtml();
+    if (invHtml) {
+      const phone = (State.currentPatient.phone || '').replace(/\D/g, '');
+      const dateCompact = now.toISOString().slice(0, 10).replace(/-/g, '');
+      const invFileName = `${dateCompact}-${phone}-invoice.pdf`;
+      const invBlob = await renderHtmlToPdfBlobA5(invHtml);
+      const invHandle = await patientDir.getFileHandle(invFileName, { create: true });
+      const invWritable = await invHandle.createWritable();
+      await invWritable.write(invBlob);
+      await invWritable.close();
+      PdfDriveQueue.push({ patientId, fileName: invFileName, blob: invBlob });
+      toast('Saved: Rx + Invoice PDFs');
+    } else {
+      toast('PDF saved: ' + fileName);
+    }
+
+    if (GDrive.token) syncPdfsToDrive();
   } catch(e) {
     console.error('PDF save failed', e);
   }

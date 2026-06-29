@@ -400,7 +400,8 @@
           </div>
           <div class="np-field np-field-phone">
             <label class="np-label">Phone Number <span class="np-req">*</span></label>
-            <input id="np-phone" class="np-input" type="tel" placeholder="9xxxxxxxxx" autocomplete="off">
+            <input id="np-phone" class="np-input" type="tel" placeholder="9xxxxxxxxx" autocomplete="off" oninput="checkExistingPatientByPhone(this.value)">
+            <div id="np-existing-alert" style="display:none;margin-top:6px;padding:8px 10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;font-size:12px;"></div>
           </div>
         </div>
 
