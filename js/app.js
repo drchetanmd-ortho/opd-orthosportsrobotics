@@ -243,6 +243,11 @@ async function loadPatient(id) {
   }
   renderPatientList();
   updatePatientHeader();
+  // Ensure body selector is always rendered (guard against stale DOM state)
+  if (typeof renderBodySelector === 'function') {
+    const wrap = document.getElementById('body-selector-wrap');
+    if (wrap && !wrap.querySelector('.body-parts-grid')) renderBodySelector();
+  }
 }
 
 function updatePatientHeader() {
@@ -581,7 +586,6 @@ function renderMedicineTable() {
           autocomplete="off" spellcheck="false"
           oninput="rxInlineSearch(this.value)"
           onfocus="rxInlineSearch(this.value)">
-        <div id="rx-inline-results" class="rx-inline-results" style="display:none;"></div>
       </td>
       <td></td>
     </tr>`;
@@ -664,28 +668,50 @@ function addMedicine(med) {
 }
 
 // ─── Inline Rx Search ─────────────────────────────────────────────────────────
+// Dropdown is portalled to body (position:fixed) to escape .rx-section overflow:hidden clipping
+function _getRxDropdown() {
+  let el = document.getElementById('rx-inline-results');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'rx-inline-results';
+    el.className = 'rx-inline-results';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
 function rxInlineSearch(query) {
-  const resultsEl = document.getElementById('rx-inline-results');
-  if (!resultsEl) return;
+  const input = document.getElementById('rx-inline-search');
+  const resultsEl = _getRxDropdown();
+
   const results = searchMedicines(query, 30);
   if (!results.length) { resultsEl.style.display = 'none'; return; }
+
+  // Position dropdown below the search input using fixed coordinates
+  if (input) {
+    const r = input.getBoundingClientRect();
+    resultsEl.style.left  = r.left + 'px';
+    resultsEl.style.top   = (r.bottom + 2) + 'px';
+    resultsEl.style.width = r.width + 'px';
+  }
 
   resultsEl.style.display = 'block';
   resultsEl.innerHTML = results.map(med => {
     const already = State.medicines.some(m => m.med.id === med.id);
     return `<div class="rx-inline-opt${already ? ' rx-inline-added' : ''}" onclick="${already ? '' : `rxInlinePick(${med.id})`}">
       <span class="rx-inline-type" style="${typeBadgeStyle(med.type)}">${med.type}</span>
-      <span class="rx-inline-brand">${med.brand}</span>
-      <span class="rx-inline-content">${med.content}</span>
+      <span class="rx-inline-brand">${esc(med.brand)}</span>
+      <span class="rx-inline-content">${esc(med.content)}</span>
       ${already ? '<span class="rx-inline-tick">✓</span>' : ''}
     </div>`;
   }).join('');
 }
 
 function rxInlinePick(medId) {
-  const med = MEDICINE_DB.find(m => m.id === medId);
+  const med = [...MEDICINE_DB, ...getRepo()].find(m => m.id === medId);
   if (!med) return;
-  document.getElementById('rx-inline-results').style.display = 'none';
+  _getRxDropdown().style.display = 'none';
   addMedicine(med);
 }
 
@@ -745,8 +771,8 @@ function addRepoMedicine(repoEntry) {
 
 // Close inline results when clicking outside
 document.addEventListener('click', e => {
-  const results = document.getElementById('rx-inline-results');
-  if (results && !results.contains(e.target) && e.target.id !== 'rx-inline-search') {
+  const results = _getRxDropdown();
+  if (results.style.display !== 'none' && !results.contains(e.target) && e.target.id !== 'rx-inline-search') {
     results.style.display = 'none';
   }
 });
@@ -1536,6 +1562,11 @@ async function saveVisit() {
   await initPatientPanel();
   renderPatientList();
   toast('Visit saved successfully');
+
+  // Auto-backup PDF to local folder + Google Drive (non-blocking)
+  const hasContent = State.currentVisit.diagnosis || State.currentVisit.complaints ||
+                     State.currentVisit.medicines?.length;
+  if (hasContent) savePrescriptionPdf();
 }
 
 async function sharePrescription() {

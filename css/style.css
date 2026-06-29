@@ -358,11 +358,11 @@ textarea.form-field { min-height: 64px; }
 }
 .rx-inline-search::placeholder { color: var(--text3); }
 .rx-inline-results {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+  position: fixed; z-index: 9999;
   background: var(--surface); border: 1.5px solid var(--blue);
-  border-radius: 0 0 var(--radius) var(--radius);
+  border-radius: var(--radius);
   max-height: 240px; overflow-y: auto;
-  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
 }
 .rx-inline-opt {
   display: flex; align-items: center; gap: 8px;
