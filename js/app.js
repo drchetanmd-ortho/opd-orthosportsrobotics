@@ -69,13 +69,13 @@ function uniqueId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
-function toast(msg, type = 'success') {
+function toast(msg, type = 'success', duration = 2500) {
   const t = document.createElement('div');
   t.className = `toast toast-${type}`;
   t.textContent = msg;
   document.getElementById('toast-container').appendChild(t);
   setTimeout(() => t.classList.add('show'), 10);
-  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2500);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, duration);
 }
 
 // ─── Patient Panel ────────────────────────────────────────────────────────────
@@ -699,7 +699,7 @@ function rxInlineSearch(query) {
   resultsEl.style.display = 'block';
   resultsEl.innerHTML = results.map(med => {
     const already = State.medicines.some(m => m.med.id === med.id);
-    return `<div class="rx-inline-opt${already ? ' rx-inline-added' : ''}" onclick="${already ? '' : `rxInlinePick(${med.id})`}">
+    return `<div class="rx-inline-opt${already ? ' rx-inline-added' : ''}" onclick="${already ? '' : `rxInlinePick('${med.id.replace(/'/g,"\\'")}')` }">
       <span class="rx-inline-type" style="${typeBadgeStyle(med.type)}">${med.type}</span>
       <span class="rx-inline-brand">${esc(med.brand)}</span>
       <span class="rx-inline-content">${esc(med.content)}</span>
@@ -1561,12 +1561,13 @@ async function saveVisit() {
 
   await initPatientPanel();
   renderPatientList();
-  toast('Visit saved successfully');
+  toast('Visit saved ✓  —  backing up PDF…');
 
   // Auto-backup PDF to local folder + Google Drive (non-blocking)
   const hasContent = State.currentVisit.diagnosis || State.currentVisit.complaints ||
                      State.currentVisit.medicines?.length;
   if (hasContent) savePrescriptionPdf();
+  else toast('Visit saved ✓  (no content to back up)', 'info');
 }
 
 async function sharePrescription() {
@@ -2650,8 +2651,11 @@ async function savePrescriptionPdf() {
     const rxFileName = `${dateCompact}-${phone}-RX.pdf`;
     const rxBlob = await renderHtmlToPdfBlob(rxHtml);
     await autoBackupPdf(rxBlob, rxFileName, patientId);
-    toast('Prescription backed up ✓');
-  } catch(e) { console.error('Rx backup failed', e); }
+    toast('Prescription PDF backed up ✓', 'success', 4000);
+  } catch(e) {
+    console.error('Rx backup failed', e);
+    toast('PDF backup failed — check folder/Drive settings', 'error');
+  }
 }
 
 async function saveInvoicePdf() {
