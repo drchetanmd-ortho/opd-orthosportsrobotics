@@ -260,6 +260,41 @@ function updatePatientHeader() {
 }
 
 async function startNewVisit(patient) {
+  // Check if there's already a visit for today — reload it instead of starting fresh
+  const allVisits = await DB.getPatientVisits(patient.id);
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todayVisit = allVisits.find(v => v.date >= todayStart.getTime());
+
+  if (todayVisit) {
+    State.currentVisit = todayVisit;
+    State.medicines = (todayVisit.medicines || []).map(m => ({
+      med: { id:m.id, brand:m.brand, content:m.content, type:m.type, form:m.form },
+      dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
+      frequency: m.frequency, duration: m.duration, qty: m.qty,
+      details: m.details || '', notes: m.notes || ''
+    }));
+    renderConsultationForm();
+    renderMedicineTable();
+    // Fill all fields from saved visit
+    const v = todayVisit;
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+    set('field-complaints', v.complaints); set('field-hopi', v.hopi);
+    set('field-past-history', v.pastHistory); set('field-allergies', v.allergies);
+    set('field-examination', v.examination); set('field-investigations', v.investigations);
+    set('field-diagnosis', v.diagnosis); set('field-icd10', v.icd10);
+    set('field-advice', v.advice); set('field-follow-up', v.followUp);
+    set('field-referred-to', v.referredTo); set('field-procedure', v.procedure);
+    set('field-notes', v.notes);
+    // Pre-fill persistent fields from this visit
+    const visits = allVisits;
+    if (visits.length > 0) {
+      const last = visits[0];
+      if (!v.allergies)    set('field-allergies',    last.allergies);
+      if (!v.pastHistory)  set('field-past-history', last.pastHistory);
+    }
+    return;
+  }
+
   State.medicines = [];
   const visit = {
     id: uniqueId(),
@@ -450,7 +485,36 @@ function renderConsultationForm() {
 }
 
 function updateVisitField(field, value) {
-  if (State.currentVisit) State.currentVisit[field] = value;
+  if (State.currentVisit) {
+    State.currentVisit[field] = value;
+    scheduleAutoSave();
+  }
+}
+
+let _autoSaveTimer = null;
+function scheduleAutoSave() {
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(async () => {
+    if (!State.currentPatient || !State.currentVisit) return;
+    // Collect current field values
+    const fields = ['complaints','hopi','past-history','allergies','examination',
+      'investigations','diagnosis','icd10','advice','follow-up','referred-to','procedure','notes'];
+    fields.forEach(f => {
+      const el = document.getElementById('field-' + f);
+      if (el) {
+        const key = f.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        State.currentVisit[key === 'followUp' ? 'followUp' : key] = el.value;
+      }
+    });
+    State.currentVisit.medicines = State.medicines.map(m => ({
+      id: m.med.id, brand: m.med.brand, content: m.med.content,
+      type: m.med.type, form: m.med.form,
+      dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
+      frequency: m.frequency, duration: m.duration, qty: m.qty,
+      details: m.details || '', notes: m.notes || ''
+    }));
+    await DB.saveVisit(State.currentVisit);
+  }, 1500);
 }
 
 // ─── Medicine Table ───────────────────────────────────────────────────────────
@@ -541,12 +605,14 @@ function updateMed(idx, field, value) {
   if (!State.medicines[idx]) return;
   if (field === 'type') State.medicines[idx].med.type = value;
   else State.medicines[idx][field] = value;
+  scheduleAutoSave();
 }
 
 function removeMed(idx) {
   State.medicines.splice(idx, 1);
   renderMedicineTable();
   refreshAlphaList();
+  scheduleAutoSave();
 }
 
 function refreshAlphaList() {
@@ -579,6 +645,7 @@ function addMedicine(med) {
   });
   renderMedicineTable();
   refreshAlphaList();
+  scheduleAutoSave();
   // Keep right-panel dropdown open
   const ms = document.getElementById('med-search');
   if (ms) { ms.value = ''; handleMedSearch(''); }
@@ -1202,7 +1269,8 @@ function printInvoice() {
   const total = items.reduce((s, i) => s + i.amt, 0);
   const age = p.age || calcAge(p.dob) || '?';
   const now = new Date();
-  const invoiceNo = `INV-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${Math.floor(Math.random()*900)+100}`;
+  const phone = (p.phone || p.whatsapp || '').replace(/\D/g,'');
+  const invoiceNo = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${phone}-INV`;
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Invoice – ${p.name}</title>
@@ -1265,6 +1333,8 @@ function printInvoice() {
   win.document.write(html);
   win.document.close();
   closeInvoiceModal();
+  // Auto-backup invoice PDF
+  saveInvoicePdf();
 }
 
 async function shareInvoice() {
@@ -2327,7 +2397,8 @@ function buildInvoiceHtml() {
   const total = items.reduce((s, i) => s + i.amt, 0);
   const age = p.age || calcAge(p.dob) || '?';
   const now = new Date();
-  const invoiceNo = `INV-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${Math.floor(Math.random()*900)+100}`;
+  const phone = (p.phone || p.whatsapp || '').replace(/\D/g,'');
+  const invoiceNo = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${phone}-INV`;
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
 * { margin:0;padding:0;box-sizing:border-box; }
@@ -2468,55 +2539,57 @@ async function saveInvoicePdf() {
   }
 }
 
+// Central backup: saves blob to local folder + Google Drive
+async function autoBackupPdf(blob, fileName, patientId) {
+  let savedLocal = false;
+  // 1. Local folder (desktop/supported browsers)
+  if (PdfStore.dirHandle) {
+    try {
+      const perm = await PdfStore.dirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') await PdfStore.dirHandle.requestPermission({ mode: 'readwrite' });
+      const dir = await PdfStore.dirHandle.getDirectoryHandle(patientId, { create: true });
+      const fh = await dir.getFileHandle(fileName, { create: true });
+      const w = await fh.createWritable();
+      await w.write(blob); await w.close();
+      savedLocal = true;
+    } catch(e) { console.warn('Local folder save failed', e); }
+  }
+  // 2. Google Drive (always, if connected)
+  PdfDriveQueue.push({ patientId, fileName, blob });
+  if (GDrive.token) syncPdfsToDrive();
+  return savedLocal;
+}
+
 async function savePrescriptionPdf() {
-  if (!PdfStore.dirHandle) return;
   if (!State.currentPatient || !State.currentVisit) return;
-
   try {
-    const permission = await PdfStore.dirHandle.queryPermission({ mode: 'readwrite' });
-    if (permission !== 'granted') {
-      await PdfStore.dirHandle.requestPermission({ mode: 'readwrite' });
-    }
-
-    const patientId = State.currentPatient.id;
-    const patientDir = await PdfStore.dirHandle.getDirectoryHandle(patientId, { create: true });
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
-    const timeStr = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-    const fileName = dateStr + '_' + timeStr + '.pdf';
-
     const rxHtml = await buildPrescriptionHtml();
     if (!rxHtml) return;
+    const now = new Date();
+    const patientId = State.currentPatient.id;
+    const phone = (State.currentPatient.phone || '').replace(/\D/g,'');
+    const dateCompact = now.toISOString().slice(0,10).replace(/-/g,'');
+    const rxFileName = `${dateCompact}-${phone}-RX.pdf`;
+    const rxBlob = await renderHtmlToPdfBlob(rxHtml);
+    await autoBackupPdf(rxBlob, rxFileName, patientId);
+    toast('Prescription backed up ✓');
+  } catch(e) { console.error('Rx backup failed', e); }
+}
 
-    // Save prescription PDF
-    const pdfBlob = await renderHtmlToPdfBlob(rxHtml);
-    const fileHandle = await patientDir.getFileHandle(fileName, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(pdfBlob);
-    await writable.close();
-    PdfDriveQueue.push({ patientId, fileName, blob: pdfBlob });
-
-    // Save invoice as separate PDF if items exist
-    const invHtml = buildInvoiceHtml();
-    if (invHtml) {
-      const phone = (State.currentPatient.phone || '').replace(/\D/g, '');
-      const dateCompact = now.toISOString().slice(0, 10).replace(/-/g, '');
-      const invFileName = `${dateCompact}-${phone}-inv.pdf`;
-      const invBlob = await renderHtmlToPdfBlobA5(invHtml);
-      const invHandle = await patientDir.getFileHandle(invFileName, { create: true });
-      const invWritable = await invHandle.createWritable();
-      await invWritable.write(invBlob);
-      await invWritable.close();
-      PdfDriveQueue.push({ patientId, fileName: invFileName, blob: invBlob });
-      toast('Saved: Rx + Invoice PDFs');
-    } else {
-      toast('PDF saved: ' + fileName);
-    }
-
-    if (GDrive.token) syncPdfsToDrive();
-  } catch(e) {
-    console.error('PDF save failed', e);
-  }
+async function saveInvoicePdf() {
+  const invHtml = buildInvoiceHtml();
+  if (!invHtml) { toast('Add items to invoice first', 'error'); return; }
+  if (!State.currentPatient) return;
+  try {
+    const now = new Date();
+    const patientId = State.currentPatient.id;
+    const phone = (State.currentPatient.phone || '').replace(/\D/g,'');
+    const dateCompact = now.toISOString().slice(0,10).replace(/-/g,'');
+    const invFileName = `${dateCompact}-${phone}-INV.pdf`;
+    const invBlob = await renderHtmlToPdfBlobA5(invHtml);
+    await autoBackupPdf(invBlob, invFileName, patientId);
+    toast('Invoice backed up ✓');
+  } catch(e) { console.error('Invoice backup failed', e); toast('Invoice backup failed', 'error'); }
 }
 
 const PdfDriveQueue = [];
