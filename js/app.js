@@ -279,8 +279,11 @@ async function startNewVisit(patient) {
     State.currentVisit = todayVisit;
     State.medicines = (todayVisit.medicines || []).map(m => ({
       med: { id:m.id, brand:m.brand, content:m.content, type:m.type, form:m.form },
-      dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
-      frequency: m.frequency, duration: m.duration, qty: m.qty,
+      dose: m.dose, timings: m.timings || '1-0-0',
+      timingsNote: m.timingsNote || 'After Food',
+      frequency: m.frequency || 'Once Daily',
+      duration: m.duration || 'As Directed',
+      qty: m.qty || '',
       details: m.details || '', notes: m.notes || ''
     }));
     renderConsultationForm();
@@ -640,7 +643,7 @@ function editNotes(idx) {
 }
 
 function addMedicine(med) {
-  if (State.medicines.findIndex(m => m.med.id === med.id) >= 0) {
+  if (State.medicines.findIndex(m => String(m.med.id) === String(med.id)) >= 0) {
     toast(`${med.brand} already added`, 'warning');
     return;
   }
@@ -685,21 +688,37 @@ function rxInlineSearch(query) {
   const input = document.getElementById('rx-inline-search');
   const resultsEl = _getRxDropdown();
 
-  const results = searchMedicines(query, 30);
+  // Merge MEDICINE_DB + repo/custom so inline search finds all medicines
+  const allMeds = [...MEDICINE_DB];
+  getRepo().forEach(r => { if (!allMeds.some(m => String(m.id) === String(r.id))) allMeds.push(r); });
+  const results = query.trim()
+    ? allMeds.filter(m => {
+        const q = query.toLowerCase();
+        return m.brand.toLowerCase().includes(q) || (m.content||'').toLowerCase().includes(q) ||
+               (m.indications||[]).join(' ').toLowerCase().includes(q);
+      }).slice(0, 30)
+    : allMeds.slice(0, 30);
   if (!results.length) { resultsEl.style.display = 'none'; return; }
 
-  // Position dropdown below the search input using fixed coordinates
+  // Position dropdown — flip above if not enough space below (handles mobile keyboard)
   if (input) {
     const r = input.getBoundingClientRect();
-    resultsEl.style.left  = r.left + 'px';
-    resultsEl.style.top   = (r.bottom + 2) + 'px';
-    resultsEl.style.width = r.width + 'px';
+    const dropH = Math.min(240, results.length * 52);
+    const spaceBelow = window.innerHeight - r.bottom;
+    const minW = Math.max(r.width, 260);
+    resultsEl.style.width = minW + 'px';
+    resultsEl.style.left  = Math.min(r.left, window.innerWidth - minW - 8) + 'px';
+    if (spaceBelow < dropH + 8 && r.top > dropH) {
+      resultsEl.style.top    = (r.top - dropH - 2) + 'px';
+    } else {
+      resultsEl.style.top    = (r.bottom + 2) + 'px';
+    }
   }
 
   resultsEl.style.display = 'block';
   resultsEl.innerHTML = results.map(med => {
-    const already = State.medicines.some(m => m.med.id === med.id);
-    return `<div class="rx-inline-opt${already ? ' rx-inline-added' : ''}" onclick="${already ? '' : `rxInlinePick('${med.id.replace(/'/g,"\\'")}')` }">
+    const already = State.medicines.some(m => String(m.med.id) === String(med.id));
+    return `<div class="rx-inline-opt${already ? ' rx-inline-added' : ''}" onclick="${already ? '' : `rxInlinePick(${JSON.stringify(med.id)})`}">
       <span class="rx-inline-type" style="${typeBadgeStyle(med.type)}">${med.type}</span>
       <span class="rx-inline-brand">${esc(med.brand)}</span>
       <span class="rx-inline-content">${esc(med.content)}</span>
@@ -709,7 +728,8 @@ function rxInlineSearch(query) {
 }
 
 function rxInlinePick(medId) {
-  const med = [...MEDICINE_DB, ...getRepo()].find(m => m.id === medId);
+  // IDs may be numeric (MEDICINE_DB) or string (custom) — compare as strings
+  const med = [...MEDICINE_DB, ...getRepo()].find(m => String(m.id) === String(medId));
   if (!med) return;
   _getRxDropdown().style.display = 'none';
   addMedicine(med);
@@ -750,7 +770,8 @@ function saveMedToRepo(idx) {
 }
 
 function addRepoMedicine(repoEntry) {
-  if (State.medicines.findIndex(m => m.med.id === repoEntry.id) >= 0) {
+  if (!repoEntry) return;
+  if (State.medicines.findIndex(m => String(m.med.id) === String(repoEntry.id)) >= 0) {
     toast(`${repoEntry.brand} already added`, 'warning'); return;
   }
   const baseMed = MEDICINE_DB.find(m => m.id === repoEntry.id) || {
@@ -857,7 +878,7 @@ function renderMedBrowserList(query) {
     .sort((a, b) => a.brand.localeCompare(b.brand))
     .map(r => {
       const isAdded = added.has(r.id);
-      const clickAction = isAdded ? '' : `addRepoMedicine(getRepo().find(x=>x.id==='${r.id}'))`;
+      const clickAction = isAdded ? '' : `addRepoMedicine(getRepo().find(x=>String(x.id)==='${r.id}'))`;
       return `<div class="med-alpha-row med-alpha-repo ${isAdded ? 'med-alpha-added' : ''}">
         <span class="med-alpha-badge" style="${typeBadgeStyle(r.type)}">${r.type}</span>
         <div class="med-alpha-info" onclick="${clickAction}" style="cursor:${isAdded?'default':'pointer'};flex:1">
@@ -1364,6 +1385,7 @@ function printInvoice() {
 </body></html>`;
 
   const win = window.open('', '_blank', 'width=800,height=600');
+  if (!win) { toast('Popup blocked — allow popups for this site in browser settings', 'error'); return; }
   win.document.write(html);
   win.document.close();
   closeInvoiceModal();
@@ -1497,17 +1519,17 @@ function tmplSearchMeds(query) {
     if (!found.length) { resultsEl.style.display = 'none'; return; }
     resultsEl.style.display = 'block';
     resultsEl.innerHTML = found.map(m => `
-      <div class="tmpl-med-option" onclick="addTmplMed(${m.id})">
-        <div class="tmpl-med-opt-brand">${m.type}. ${m.brand}</div>
-        <div class="tmpl-med-opt-content">${m.content}</div>
+      <div class="tmpl-med-option" onclick="addTmplMed(${JSON.stringify(m.id)})">
+        <div class="tmpl-med-opt-brand">${esc(m.type)}. ${esc(m.brand)}</div>
+        <div class="tmpl-med-opt-content">${esc(m.content)}</div>
       </div>`).join('');
   }, 80);
 }
 
 function addTmplMed(medId) {
-  const med = MEDICINE_DB.find(m => m.id === medId);
+  const med = MEDICINE_DB.find(m => String(m.id) === String(medId));
   if (!med) return;
-  if (TmplState.meds.find(m => m.id === medId)) {
+  if (TmplState.meds.find(m => String(m.id) === String(medId))) {
     toast('Already in template', 'warning'); return;
   }
   TmplState.meds.push({
@@ -1563,11 +1585,8 @@ async function saveVisit() {
   renderPatientList();
   toast('Visit saved ✓  —  backing up PDF…');
 
-  // Auto-backup PDF to local folder + Google Drive (non-blocking)
-  const hasContent = State.currentVisit.diagnosis || State.currentVisit.complaints ||
-                     State.currentVisit.medicines?.length;
-  if (hasContent) savePrescriptionPdf();
-  else toast('Visit saved ✓  (no content to back up)', 'info');
+  // Auto-backup PDF — always, regardless of content
+  savePrescriptionPdf();
 }
 
 async function sharePrescription() {
@@ -1667,11 +1686,8 @@ function showSharePanel(phone, msgText, patientName) {
 async function printPrescription() {
   if (!State.currentPatient) { toast('No patient selected', 'error'); return; }
 
-  // Auto-save first
+  // Auto-save first (saveVisit already triggers savePrescriptionPdf)
   await saveVisit();
-
-  // Auto-save PDF to folder (runs in background, doesn't block print)
-  savePrescriptionPdf();
 
   const p = State.currentPatient;
   const v = State.currentVisit;
@@ -1860,6 +1876,7 @@ async function printPrescription() {
 </body></html>`;
 
   const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { toast('Popup blocked — allow popups for this site in browser settings', 'error'); return; }
   win.document.write(html);
   win.document.close();
 }
@@ -1896,10 +1913,10 @@ async function renderPreviousVisits(patientId) {
           <span class="pvb-chevron">›</span>
         </div>
         <div class="pvb-tab-body" style="display:none">
-          <div class="pvb-detail-row"><b>Complaints:</b> ${v.complaints || '—'}</div>
-          <div class="pvb-detail-row"><b>Diagnosis:</b> ${v.diagnosis || '—'}</div>
-          ${v.medicines?.length ? `<div class="pvb-detail-row"><b>Medicines:</b> ${v.medicines.map(m=>m.brand).join(', ')}</div>` : ''}
-          ${v.advice ? `<div class="pvb-detail-row"><b>Advice:</b> ${v.advice}</div>` : ''}
+          <div class="pvb-detail-row"><b>Complaints:</b> ${esc(v.complaints || '—')}</div>
+          <div class="pvb-detail-row"><b>Diagnosis:</b> ${esc(v.diagnosis || '—')}</div>
+          ${v.medicines?.length ? `<div class="pvb-detail-row"><b>Medicines:</b> ${v.medicines.map(m=>esc(m.brand)).join(', ')}</div>` : ''}
+          ${v.advice ? `<div class="pvb-detail-row"><b>Advice:</b> ${esc(v.advice)}</div>` : ''}
           <button class="pvb-load-btn" onclick="event.stopPropagation();loadVisit('${v.id}')">Load this visit</button>
         </div>
       </div>`;
@@ -1977,12 +1994,12 @@ function switchLeftTab(tab) {
         return;
       }
       list.innerHTML = ps.slice(0, 20).map(p => `
-        <div class="patient-item ${State.currentPatient?.id === p.id ? 'active' : ''}" onclick="loadPatient('${p.id}')">
-          <div class="patient-avatar">${(p.name || 'U')[0].toUpperCase()}</div>
+        <div class="patient-item ${State.currentPatient?.id === p.id ? 'active' : ''}" onclick="loadPatient('${esc(p.id)}')">
+          <div class="patient-avatar">${esc((p.name || 'U')[0].toUpperCase())}</div>
           <div class="patient-info">
-            <div class="patient-name">${p.name || 'Unknown'}</div>
-            <div class="patient-meta">${p.id} · ${p.age || calcAge(p.dob) || '?'}y, ${p.gender || '?'}</div>
-            <div class="patient-phone">${p.phone || ''}</div>
+            <div class="patient-name">${esc(p.name || 'Unknown')}</div>
+            <div class="patient-meta">${esc(p.id)} · ${p.age || calcAge(p.dob) || '?'}y, ${esc(p.gender || '?')}</div>
+            <div class="patient-phone">${esc(p.phone || '')}</div>
           </div>
           <div class="patient-date">${p.lastVisit ? formatDate(p.lastVisit) : ''}</div>
         </div>
@@ -2149,19 +2166,29 @@ function openBackupModal() {
   document.getElementById("gdrive-client-id").value = cid;
   updateGdriveUI();
   updatePdfFolderUI();
+
+  // Trigger Drive backup immediately when Backup button pressed (skip if already running)
+  if (GDrive.token && !GDrive._backupInProgress) {
+    toast('Backing up to Google Drive…', 'success', 2000);
+    GDrive._backupInProgress = true;
+    gdriveBackupNow()
+      .then(() => toast('Drive backup complete ✓', 'success', 3000))
+      .catch(() => toast('Drive backup failed', 'error'))
+      .finally(() => { GDrive._backupInProgress = false; });
+  }
+  if (PdfStore.dirHandle && State.currentPatient && State.currentVisit) {
+    savePrescriptionPdf();
+  }
 }
 function closeBackupModal() {
   document.getElementById("modal-backup").style.display = "none";
 }
 
 async function exportBackup() {
-  const patients = await DB.getAllPatients();
-  const allVisits = [];
-  for (const p of patients) {
-    const visits = await DB.getPatientVisits(p.id);
-    allVisits.push(...visits);
-  }
-  const templates = await DB.getAllTemplates();
+  const [patients, templates] = await Promise.all([DB.getAllPatients(), DB.getAllTemplates()]);
+  // Fetch all visits in parallel
+  const visitArrays = await Promise.all(patients.map(p => DB.getPatientVisits(p.id)));
+  const allVisits = visitArrays.flat();
   const data = {
     version: 2, exportedAt: new Date().toISOString(),
     clinic: "Aarna Orthopaedic Clinic",
@@ -2173,9 +2200,12 @@ async function exportBackup() {
   const a = document.createElement("a");
   const date = new Date().toISOString().slice(0, 10);
   a.href = url; a.download = "aarna-opd-backup-" + date + ".json";
-  a.click(); URL.revokeObjectURL(url);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
   setLastBackupInfo("Local export done at " + new Date().toLocaleTimeString("en-IN"));
-  toast("Backup exported");
+  toast("Backup exported (" + patients.length + " patients)");
 }
 
 function validatePatient(p) {
@@ -2324,10 +2354,9 @@ async function gdriveEnsureFolder() {
 async function gdriveBackupNow() {
   if (!GDrive.token) return;
   try {
-    const patients = await DB.getAllPatients();
-    const allVisits = [];
-    for (const p of patients) { const v = await DB.getPatientVisits(p.id); allVisits.push(...v); }
-    const templates = await DB.getAllTemplates();
+    const [patients, templates] = await Promise.all([DB.getAllPatients(), DB.getAllTemplates()]);
+    const visitArrays = await Promise.all(patients.map(p => DB.getPatientVisits(p.id)));
+    const allVisits = visitArrays.flat();
     const data = {
       version: 2, exportedAt: new Date().toISOString(),
       clinic: "Aarna Orthopaedic Clinic",
@@ -2587,15 +2616,18 @@ async function renderCombinedPdfBlob(rxHtml, invHtml) {
     const iframe = document.createElement('iframe');
     iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${w}px;height:${h}px;border:none;`;
     document.body.appendChild(iframe);
+    const cleanup = () => { if (iframe.parentNode) document.body.removeChild(iframe); };
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('PDF page render timed out')); }, 15000);
     iframe.onload = async () => {
       try {
         await new Promise(r => setTimeout(r, 500));
         const canvas = await html2canvas(iframe.contentDocument.body, {
           scale:2, useCORS:true, allowTaint:true, width:w, height:h, windowWidth:w, windowHeight:h
         });
+        clearTimeout(timeout);
         resolve(canvas.toDataURL('image/jpeg', 0.92));
-      } catch(e) { reject(e); }
-      finally { document.body.removeChild(iframe); }
+      } catch(e) { clearTimeout(timeout); reject(e); }
+      finally { cleanup(); }
     };
     iframe.srcdoc = html;
   });
@@ -2647,8 +2679,11 @@ async function savePrescriptionPdf() {
     const now = new Date();
     const patientId = State.currentPatient.id;
     const phone = (State.currentPatient.phone || '').replace(/\D/g,'');
-    const dateCompact = now.toISOString().slice(0,10).replace(/-/g,'');
-    const rxFileName = `${dateCompact}-${phone}-RX.pdf`;
+    // Use visit date so re-saves overwrite the same file
+    const visitDate = State.currentVisit.date
+      ? new Date(State.currentVisit.date).toISOString().slice(0,10).replace(/-/g,'')
+      : now.toISOString().slice(0,10).replace(/-/g,'');
+    const rxFileName = `${visitDate}-${phone}-RX.pdf`;
     const rxBlob = await renderHtmlToPdfBlob(rxHtml);
     await autoBackupPdf(rxBlob, rxFileName, patientId);
     toast('Prescription PDF backed up ✓', 'success', 4000);
