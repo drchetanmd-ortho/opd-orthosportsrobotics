@@ -573,10 +573,11 @@
       </div>
 
     </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="closeInvoiceModal()">Cancel</button>
-      <button class="btn-primary" style="background:#0ea5e9;border-color:#0ea5e9;" onclick="shareInvoice()">📤 Send</button>
-      <button class="btn-primary" onclick="printInvoice()">🖨️ Print Invoice</button>
+    <div class="modal-footer" style="gap:8px;flex-wrap:wrap;">
+      <button class="btn-secondary" onclick="closeInvoiceModal()">✕ Cancel</button>
+      <button class="action-btn btn-save" onclick="saveInvoicePdf()" style="font-size:13px;padding:7px 14px;">💾 Save</button>
+      <button class="action-btn btn-print" onclick="printInvoice()" style="font-size:13px;padding:7px 14px;">🖨️ Print</button>
+      <button class="action-btn btn-share" onclick="shareInvoice()" style="font-size:13px;padding:7px 14px;">📤 Send</button>
     </div>
   </div>
 </div>

@@ -2436,6 +2436,38 @@ async function renderCombinedPdfBlob(rxHtml, invHtml) {
   return pdf.output('blob');
 }
 
+async function saveInvoicePdf() {
+  const invHtml = buildInvoiceHtml();
+  if (!invHtml) { toast('Add items to invoice first', 'error'); return; }
+  if (!PdfStore.dirHandle) { toast('Select prescription folder first (Backup tab)', 'warning'); return; }
+  if (!State.currentPatient) return;
+
+  try {
+    const permission = await PdfStore.dirHandle.queryPermission({ mode: 'readwrite' });
+    if (permission !== 'granted') await PdfStore.dirHandle.requestPermission({ mode: 'readwrite' });
+
+    const patientId = State.currentPatient.id;
+    const phone = (State.currentPatient.phone || '').replace(/\D/g, '');
+    const now = new Date();
+    const dateCompact = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const invFileName = `${dateCompact}-${phone}-inv.pdf`;
+
+    const patientDir = await PdfStore.dirHandle.getDirectoryHandle(patientId, { create: true });
+    const invBlob = await renderHtmlToPdfBlobA5(invHtml);
+    const handle = await patientDir.getFileHandle(invFileName, { create: true });
+    const writable = await handle.createWritable();
+    await writable.write(invBlob);
+    await writable.close();
+
+    PdfDriveQueue.push({ patientId, fileName: invFileName, blob: invBlob });
+    if (GDrive.token) syncPdfsToDrive();
+    toast('Invoice saved: ' + invFileName);
+  } catch(e) {
+    console.error('Invoice save failed', e);
+    toast('Invoice save failed', 'error');
+  }
+}
+
 async function savePrescriptionPdf() {
   if (!PdfStore.dirHandle) return;
   if (!State.currentPatient || !State.currentVisit) return;
@@ -2469,7 +2501,7 @@ async function savePrescriptionPdf() {
     if (invHtml) {
       const phone = (State.currentPatient.phone || '').replace(/\D/g, '');
       const dateCompact = now.toISOString().slice(0, 10).replace(/-/g, '');
-      const invFileName = `${dateCompact}-${phone}-invoice.pdf`;
+      const invFileName = `${dateCompact}-${phone}-inv.pdf`;
       const invBlob = await renderHtmlToPdfBlobA5(invHtml);
       const invHandle = await patientDir.getFileHandle(invFileName, { create: true });
       const invWritable = await invHandle.createWritable();
