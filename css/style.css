@@ -2,23 +2,24 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --blue:       #1a6ef5;
-  --blue-dark:  #1254c7;
-  --blue-light: #e8f0fe;
-  --green:      #12a05c;
+  /* OrthoSportsRobotics brand palette */
+  --blue:       #2aab9a;   /* teal primary */
+  --blue-dark:  #1d8a7a;   /* teal dark */
+  --blue-light: #e0f5f2;   /* teal tint */
+  --green:      #2aab9a;   /* reuse teal for success actions */
   --red:        #e53935;
   --orange:     #f57c00;
-  --bg:         #f0f4f8;
+  --bg:         #f0f5f5;   /* very light teal-tinted grey */
   --surface:    #ffffff;
-  --surface2:   #f8fafc;
-  --border:     #e2e8f0;
-  --border2:    #cbd5e1;
-  --text:       #0f172a;
-  --text2:      #475569;
-  --text3:      #94a3b8;
-  --shadow:     0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
-  --shadow-md:  0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
-  --shadow-lg:  0 10px 15px rgba(0,0,0,.08), 0 4px 6px rgba(0,0,0,.05);
+  --surface2:   #f4faf9;
+  --border:     #d0e8e5;
+  --border2:    #b0d4d0;
+  --text:       #0d2136;   /* website dark navy */
+  --text2:      #3a5a6a;
+  --text3:      #7a9aaa;
+  --shadow:     0 1px 3px rgba(13,33,54,.08), 0 1px 2px rgba(13,33,54,.06);
+  --shadow-md:  0 4px 6px rgba(13,33,54,.07), 0 2px 4px rgba(13,33,54,.06);
+  --shadow-lg:  0 10px 15px rgba(13,33,54,.08), 0 4px 6px rgba(13,33,54,.05);
   --radius:     8px;
   --radius-lg:  12px;
   --font:       'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -34,10 +35,10 @@ body { font-family: var(--font); font-size: 13.5px; color: var(--text); backgrou
 #topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 20px;
-  background: var(--blue);
+  background: #0d2136;
   color: #fff;
   z-index: 100;
-  box-shadow: 0 2px 8px rgba(26,110,245,.4);
+  box-shadow: 0 2px 8px rgba(13,33,54,.5);
 }
 .tb-left { display: flex; align-items: center; gap: 12px; }
 .tb-logo-img { height: 64px; width: auto; object-fit: contain; border-radius: 6px; }
@@ -53,7 +54,7 @@ body { font-family: var(--font); font-size: 13.5px; color: var(--text); backgrou
 .tb-btn:hover { background: rgba(255,255,255,.28); }
 .tb-btn-green { background: var(--green); }
 .tb-btn-green:hover { background: #0d8a4f; }
-.tb-btn-backup { background: #1e3a5f; color: #fff; }
+.tb-btn-backup { background: rgba(255,255,255,.15); color: #fff; }
 .tb-btn-backup:hover { background: #16a34a; }
 .btn-share { background: #0ea5e9; color: #fff; border-color: #0ea5e9; }
 .btn-share:hover { background: #0284c7; }

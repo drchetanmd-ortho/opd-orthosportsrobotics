@@ -377,7 +377,9 @@ function openNewPatientModal() {
   document.querySelectorAll('.np-gender-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('.np-gender-btn[data-val="Male"]').classList.add('active');
   document.getElementById('np-gender').value = 'Male';
-  document.getElementById('modal-new-patient').classList.add('open');
+  const modal = document.getElementById('modal-new-patient');
+  modal.style.display = 'flex';
+  modal.classList.add('open');
   setTimeout(() => document.getElementById('np-name').focus(), 50);
 }
 
