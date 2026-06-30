@@ -1180,12 +1180,13 @@ function openInvoiceModal() {
   document.getElementById('inv-patient-info').textContent =
     `${p.name}  ·  ${age}y, ${p.gender || ''}  ·  ${p.phone || ''}  ·  ${p.id}`;
 
-  // Reset payment mode
-  document.querySelectorAll('#inv-pay-group .np-gender-btn').forEach(b => b.classList.toggle('active', b.dataset.val === 'Cash'));
-  document.getElementById('inv-pay-mode').value = 'Cash';
+  // Restore previous invoice for this visit, or start fresh
+  const saved = State.currentVisit?.invoice;
+  const payMode = saved?.payMode || 'Cash';
+  document.querySelectorAll('#inv-pay-group .np-gender-btn').forEach(b => b.classList.toggle('active', b.dataset.val === payMode));
+  document.getElementById('inv-pay-mode').value = payMode;
 
-  // Start with empty rows; let doctor pick from chips
-  renderInvoiceRows([]);
+  renderInvoiceRows(saved?.items || []);
   renderServiceChips();
   document.getElementById('modal-invoice').classList.add('open');
 }
@@ -2694,9 +2695,23 @@ async function savePrescriptionPdf() {
 }
 
 async function saveInvoicePdf() {
-  const invHtml = buildInvoiceHtml();
-  if (!invHtml) { toast('Add items to invoice first', 'error'); return; }
+  const items = getInvoiceItems();
+  if (!items.length) { toast('Add items to invoice first', 'error'); return; }
   if (!State.currentPatient) return;
+
+  // Persist invoice into the visit so it's retained on reopen and included in JSON backup
+  if (State.currentVisit) {
+    State.currentVisit.invoice = {
+      items,
+      payMode: document.getElementById('inv-pay-mode')?.value || 'Cash',
+      total: items.reduce((s, i) => s + i.amt, 0),
+      savedAt: Date.now()
+    };
+    await DB.saveVisit(State.currentVisit);
+  }
+
+  const invHtml = buildInvoiceHtml();
+  if (!invHtml) return;
   try {
     const now = new Date();
     const patientId = State.currentPatient.id;
@@ -2705,7 +2720,7 @@ async function saveInvoicePdf() {
     const invFileName = `${dateCompact}-${phone}-INV.pdf`;
     const invBlob = await renderHtmlToPdfBlobA5(invHtml);
     await autoBackupPdf(invBlob, invFileName, patientId);
-    toast('Invoice backed up ✓');
+    toast('Invoice saved & backed up ✓');
   } catch(e) { console.error('Invoice backup failed', e); toast('Invoice backup failed', 'error'); }
 }
 
