@@ -2,7 +2,7 @@
 // Format: { id, brand, type, form, content, dose, timings, timingsNote, duration, qty, indications }
 // Timings format matches prescription Excel: "M-A-N"  e.g. "0-1-0"
 
-const MEDICINE_DB = [
+const MEDICINE_SEED = [
   {
     id: 1,
     brand: "Altraday",

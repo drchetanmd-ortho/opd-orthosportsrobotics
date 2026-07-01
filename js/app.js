@@ -3,6 +3,25 @@ function esc(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// ─── Medicine Master List (editable, persisted) ───────────────────────────────
+// The list is stored in localStorage and seeded once from MEDICINE_SEED (sample
+// list). After that it's fully clinic-managed — add/delete are permanent.
+const MEDS_KEY = 'med_master_list';
+
+let MEDICINE_DB = (function loadMedList() {
+  try {
+    const saved = localStorage.getItem(MEDS_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch (e) {}
+  const seed = (typeof MEDICINE_SEED !== 'undefined') ? MEDICINE_SEED.map(m => ({ ...m })) : [];
+  try { localStorage.setItem(MEDS_KEY, JSON.stringify(seed)); } catch (e) {}
+  return seed;
+})();
+
+function saveMedList() {
+  try { localStorage.setItem(MEDS_KEY, JSON.stringify(MEDICINE_DB)); } catch (e) {}
+}
+
 // ─── State ───────────────────────────────────────────────────────────────────
 const State = {
   currentPatient: null,
@@ -935,9 +954,23 @@ document.addEventListener('click', e => {
 
 // ─── Add New Medicine Modal ───────────────────────────────────────────────────
 const CUSTOM_MEDS_KEY = 'custom_medicines';
-
 function getCustomMeds() {
   try { return JSON.parse(localStorage.getItem(CUSTOM_MEDS_KEY) || '[]'); } catch(e) { return []; }
+}
+
+// Permanently delete a medicine from the master list (and any saved copy).
+function deleteMed(id) {
+  const target = MEDICINE_DB.find(m => String(m.id) === String(id));
+  const brand = target ? target.brand : 'this medicine';
+  if (!confirm(`Delete "${brand}" from the medicines list?\n\nThis is permanent.`)) return;
+  const before = MEDICINE_DB.length;
+  MEDICINE_DB = MEDICINE_DB.filter(m => String(m.id) !== String(id));
+  saveMedList();
+  // Also drop it from the saved (starred) repo + custom stores if present
+  saveRepo(getRepo().filter(r => String(r.id) !== String(id)));
+  localStorage.setItem(CUSTOM_MEDS_KEY, JSON.stringify(getCustomMeds().filter(m => String(m.id) !== String(id))));
+  renderMedBrowserList();
+  if (MEDICINE_DB.length < before) toast(`${brand} deleted`);
 }
 
 function openAddMedModal() {
@@ -953,7 +986,6 @@ function closeAddMedModal() {
 function saveNewMed() {
   const brand = document.getElementById('nm-brand').value.trim();
   if (!brand) { toast('Brand name is required', 'error'); return; }
-  const custom = getCustomMeds();
   const newMed = {
     id: 'cm_' + Date.now(),
     brand,
@@ -965,17 +997,187 @@ function saveNewMed() {
     frequency: document.getElementById('nm-freq').value,
     duration: document.getElementById('nm-dur').value,
     dose: document.getElementById('nm-dosage').value,
-    qty: ''
+    qty: '',
+    indications: []
   };
-  custom.push(newMed);
-  localStorage.setItem(CUSTOM_MEDS_KEY, JSON.stringify(custom));
-  // Also save to repo so it appears starred
-  const repo = getRepo();
-  repo.push({ ...newMed });
-  saveRepo(repo);
+  MEDICINE_DB.push(newMed);
+  saveMedList();
   closeAddMedModal();
-  initMedAlphaBrowser();
-  // Refresh the medicine browser to show the newly added medicine
+  refreshAlphaList();
+  toast('✓ ' + brand + ' added to medicine list');
+}
+
+// ─── Import Medicines (bulk paste + link) ─────────────────────────────────────
+function openImportMedModal() {
+  document.getElementById('modal-import-med').style.display = 'flex';
+  switchImportTab('list');
+  setTimeout(() => document.getElementById('imp-list-text')?.focus(), 50);
+}
+function closeImportMedModal() {
+  document.getElementById('modal-import-med').style.display = 'none';
+  document.getElementById('imp-list-text').value = '';
+  document.getElementById('imp-link-url').value = '';
+  document.getElementById('imp-link-status').textContent = '';
+  document.getElementById('imp-link-preview').style.display = 'none';
+}
+function switchImportTab(which) {
+  document.getElementById('imp-tab-list').classList.toggle('active', which === 'list');
+  document.getElementById('imp-tab-link').classList.toggle('active', which === 'link');
+  document.getElementById('imp-pane-list').style.display = which === 'list' ? 'block' : 'none';
+  document.getElementById('imp-pane-link').style.display = which === 'link' ? 'block' : 'none';
+}
+
+// Guess medicine type/form from free text
+function guessMedType(text) {
+  const t = (text || '').toLowerCase();
+  if (/\b(inj|injection|syringe|vial|ampoule|pfs|pre-?filled)\b/.test(t)) return 'INJ';
+  if (/\b(cap|capsule|caps)\b/.test(t))                                    return 'CAP';
+  if (/\b(syrup|syp|suspension|solution|oral liquid|elixir)\b/.test(t))    return 'SYP';
+  if (/\b(drops?)\b/.test(t))                                              return 'DROPS';
+  if (/\b(gel)\b/.test(t))                                                 return 'GEL';
+  if (/\b(cream|ointment|oint)\b/.test(t))                                 return 'CREAM';
+  if (/\b(spray)\b/.test(t))                                               return 'SPRAY';
+  if (/\b(powder|sachet|pwd|granules)\b/.test(t))                          return 'PWD';
+  if (/\b(kit)\b/.test(t))                                                 return 'KIT';
+  return 'TAB';
+}
+
+// Parse one pasted line → {brand, content, type} (or null if blank)
+function parseMedLine(line) {
+  let s = (line || '').trim();
+  if (!s) return null;
+  s = s.replace(/^\s*(\d+[).]|[-*•·])\s+/, '');           // strip bullets / numbering
+  const type = guessMedType(s);
+  let brand = s, content = '';
+  // Split on the FIRST separator that has a space after it (avoids hyphens inside names)
+  const m = s.match(/^(.*?)\s*(?:[-–—]|::?|\||\t)\s+(.*)$/);
+  if (m) { brand = m[1].trim(); content = m[2].trim(); }
+  // Clean a trailing form-word from the brand if it's the only thing after strength
+  return { brand: brand.trim(), content: content.trim(), type };
+}
+
+function importMedList() {
+  const raw = document.getElementById('imp-list-text').value;
+  const lines = raw.split(/\r?\n/);
+  const parsed = lines.map(parseMedLine).filter(Boolean);
+  if (!parsed.length) { toast('Nothing to import — paste some medicines first', 'error'); return; }
+
+  let added = 0, skipped = 0;
+  parsed.forEach((p, i) => {
+    if (!p.brand) return;
+    const dup = MEDICINE_DB.some(m => m.brand.toLowerCase() === p.brand.toLowerCase()
+      && (m.content || '').toLowerCase() === p.content.toLowerCase());
+    if (dup) { skipped++; return; }
+    MEDICINE_DB.push({
+      id: 'cm_' + Date.now() + '_' + i,
+      brand: p.brand, content: p.content, type: p.type, form: p.type,
+      timings: '1-0-0', timingsNote: 'After Food', frequency: 'Once Daily',
+      duration: '5 Days', dose: '1', qty: '', indications: []
+    });
+    added++;
+  });
+  saveMedList();
+  closeImportMedModal();
+  refreshAlphaList();
+  toast(`✓ Imported ${added} medicine${added !== 1 ? 's' : ''}${skipped ? ` · ${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped` : ''}`, 'success', 3500);
+}
+
+// Best-effort read of a pharmacy product page via a public CORS proxy
+async function fetchViaProxy(url) {
+  const proxies = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`
+  ];
+  for (const build of proxies) {
+    try {
+      const res = await fetch(build(url), { signal: AbortSignal.timeout(9000) });
+      if (res.ok) {
+        const txt = await res.text();
+        if (txt && txt.length > 200) return txt;
+      }
+    } catch (e) { /* try next proxy */ }
+  }
+  throw new Error('fetch failed');
+}
+
+function brandFromSlug(url) {
+  try {
+    const path = new URL(url).pathname.split('/').filter(Boolean).pop() || '';
+    return decodeURIComponent(path)
+      .replace(/\.(html?|php)$/i, '')
+      .replace(/[-_]+/g, ' ')
+      .replace(/\b\d{4,}\b/g, '')                    // drop long id numbers
+      .replace(/\b(tablet|capsule|injection|syrup|cream|gel|price|buy|online|mg|ml)\b/gi, '')
+      .replace(/\s{2,}/g, ' ').trim()
+      .replace(/\b\w/g, c => c.toUpperCase());
+  } catch (e) { return ''; }
+}
+
+function cleanTitle(title) {
+  return (title || '')
+    .split(/[|\-–—:]/)[0]                              // take text before first separator
+    .replace(/\b(buy|online|price|uses|side effects|composition|substitute)\b/gi, '')
+    .replace(/\s{2,}/g, ' ').trim();
+}
+
+async function importFromLink() {
+  const url = document.getElementById('imp-link-url').value.trim();
+  const statusEl = document.getElementById('imp-link-status');
+  const previewEl = document.getElementById('imp-link-preview');
+  if (!url || !/^https?:\/\//i.test(url)) { statusEl.textContent = 'Please paste a full link starting with http…'; return; }
+
+  // No internet → can't read the page. Ask user to enter details manually.
+  if (!navigator.onLine) {
+    statusEl.textContent = '⚠ No internet connection — please enter the details manually below.';
+    document.getElementById('imp-pv-brand').value = brandFromSlug(url);
+    document.getElementById('imp-pv-content').value = '';
+    document.getElementById('imp-pv-type').value = guessMedType(url);
+    previewEl.style.display = 'block';
+    document.getElementById('imp-pv-brand').focus();
+    return;
+  }
+
+  statusEl.textContent = 'Reading link…';
+  previewEl.style.display = 'none';
+  let brand = '', content = '';
+
+  try {
+    const html = await fetchViaProxy(url);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const ogt = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || '';
+    const title = doc.querySelector('title')?.textContent || '';
+    const desc = doc.querySelector('meta[name="description"]')?.getAttribute('content')
+      || doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+    brand = cleanTitle(ogt || title);
+    // Composition: look for "salt" info in description / structured data
+    const saltMatch = desc.match(/(?:composition|contains|salt[s]?)[:\-\s]+([^.]{4,120})/i);
+    content = saltMatch ? saltMatch[1].trim() : (desc.length < 140 ? desc.trim() : '');
+    statusEl.textContent = brand ? 'Found — please review and edit if needed:' : 'Could not read the page — filling from link:';
+  } catch (e) {
+    statusEl.textContent = 'Could not read the page (site blocked it). Please check/complete the details:';
+  }
+
+  if (!brand) brand = brandFromSlug(url);
+  document.getElementById('imp-pv-brand').value = brand;
+  document.getElementById('imp-pv-content').value = content;
+  document.getElementById('imp-pv-type').value = guessMedType(brand + ' ' + content + ' ' + url);
+  previewEl.style.display = 'block';
+}
+
+function addImportedFromLink() {
+  const brand = document.getElementById('imp-pv-brand').value.trim();
+  if (!brand) { toast('Brand name is required', 'error'); return; }
+  MEDICINE_DB.push({
+    id: 'cm_' + Date.now(),
+    brand,
+    content: document.getElementById('imp-pv-content').value.trim(),
+    type: document.getElementById('imp-pv-type').value,
+    form: document.getElementById('imp-pv-type').value,
+    timings: '1-0-0', timingsNote: 'After Food', frequency: 'Once Daily',
+    duration: '5 Days', dose: '1', qty: '', indications: []
+  });
+  saveMedList();
+  closeImportMedModal();
   refreshAlphaList();
   toast('✓ ' + brand + ' added to medicine list');
 }
@@ -1032,13 +1234,14 @@ function renderMedBrowserList(query) {
     .map(m => {
       const isAdded = added.has(m.id);
       const idx = MEDICINE_DB.indexOf(m);
-      return `<div class="med-alpha-row ${isAdded ? 'med-alpha-added' : ''}" onclick="${isAdded ? '' : `addMedicine(MEDICINE_DB[${idx}])`}">
+      return `<div class="med-alpha-row ${isAdded ? 'med-alpha-added' : ''}">
         <span class="med-alpha-badge" style="${typeBadgeStyle(m.type)}">${m.type}</span>
-        <div class="med-alpha-info">
+        <div class="med-alpha-info" onclick="${isAdded ? '' : `addMedicine(MEDICINE_DB[${idx}])`}" style="cursor:${isAdded?'default':'pointer'};flex:1">
           <div class="med-alpha-brand">${hl(m.brand)}</div>
           <div class="med-alpha-content">${hl(m.content)}</div>
         </div>
         ${isAdded ? '<span class="med-alpha-tick">✓</span>' : ''}
+        <button class="med-del-btn" title="Delete from list" onclick="event.stopPropagation();deleteMed('${m.id}')">✕</button>
       </div>`;
     }).join('');
 
@@ -1048,6 +1251,11 @@ function renderMedBrowserList(query) {
   }
   const divider = repoRows && builtinRows
     ? '<div class="med-alpha-divider">All medicines</div>' : '';
+  if (!repoRows && !builtinRows && !q) {
+    list.innerHTML = `<div style="padding:16px;font-size:12.5px;color:var(--text3);text-align:center">
+      No medicines yet.<br>Use <b>＋ Add New</b> or <b>Import</b> to build your list.</div>`;
+    return;
+  }
   list.innerHTML = repoRows + divider + builtinRows;
 }
 

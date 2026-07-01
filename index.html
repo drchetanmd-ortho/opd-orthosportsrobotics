@@ -367,7 +367,10 @@
       <div class="right-section" id="med-alpha-section">
         <div class="rp-section-header">
           <span>Medicines</span>
-          <button class="btn-add-template" onclick="openAddMedModal()">＋ Add New</button>
+          <span style="display:flex;gap:6px;">
+            <button class="btn-add-template" onclick="openImportMedModal()">⇪ Import</button>
+            <button class="btn-add-template" onclick="openAddMedModal()">＋ Add New</button>
+          </span>
         </div>
         <div id="med-alpha-list" class="med-alpha-list"></div>
       </div>
@@ -775,6 +778,68 @@ if ('serviceWorker' in navigator) {
       <div style="display:flex;gap:8px;margin-top:4px;">
         <button class="btn-primary" style="flex:1" onclick="saveNewMed()">Save to Medicine List</button>
         <button class="btn-secondary" onclick="closeAddMedModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Import Medicines Modal -->
+<div id="modal-import-med" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeImportMedModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h3>Import Medicines</h3>
+      <button class="modal-close" onclick="closeImportMedModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div class="imp-tabs">
+        <button class="imp-tab active" id="imp-tab-list" onclick="switchImportTab('list')">Paste a list</button>
+        <button class="imp-tab" id="imp-tab-link" onclick="switchImportTab('link')">From a link</button>
+      </div>
+
+      <!-- Paste list -->
+      <div class="imp-pane" id="imp-pane-list" style="padding:16px 20px;">
+        <label class="modal-label">Paste medicines — one per line</label>
+        <p class="imp-help">Format: <b>Brand — Composition</b>. Type (TAB/CAP/INJ…) is auto-detected. Examples:</p>
+        <pre class="imp-example">Gemidro 150 mg - Risedronate Sodium 150 mg
+Gemtide inj - Teriparatide 20 mcg / pre-filled syringe
+GutGermina cap - Saccharomyces boulardii 250 mg</pre>
+        <textarea id="imp-list-text" class="imp-textarea" placeholder="Paste your list here…"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn-primary" style="flex:1" onclick="importMedList()">Add all to list</button>
+          <button class="btn-secondary" onclick="closeImportMedModal()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- From link -->
+      <div class="imp-pane" id="imp-pane-link" style="display:none;padding:16px 20px;">
+        <label class="modal-label">Paste a medicine web link</label>
+        <p class="imp-help">Works best with 1mg, PharmEasy, Netmeds, Apollo. The app tries to read the name & composition — please review before adding (it may not read every page correctly).</p>
+        <div style="display:flex;gap:8px;">
+          <input id="imp-link-url" class="modal-input" placeholder="https://…" autocomplete="off" style="flex:1">
+          <button class="btn-primary" onclick="importFromLink()">Read</button>
+        </div>
+        <div id="imp-link-status" class="imp-status"></div>
+        <div id="imp-link-preview" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1">
+              <label class="modal-label">Brand Name *</label>
+              <input id="imp-pv-brand" class="modal-input" autocomplete="off">
+            </div>
+            <div style="width:90px">
+              <label class="modal-label">Type</label>
+              <select id="imp-pv-type" class="modal-input">
+                <option>TAB</option><option>CAP</option><option>SYP</option>
+                <option>INJ</option><option>GEL</option><option>SPRAY</option>
+                <option>DROPS</option><option>PWD</option><option>CREAM</option><option>OINT</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:8px;">
+            <label class="modal-label">Composition / Content</label>
+            <input id="imp-pv-content" class="modal-input">
+          </div>
+          <button class="btn-primary" style="width:100%;margin-top:12px;" onclick="addImportedFromLink()">Add to list</button>
+        </div>
       </div>
     </div>
   </div>
