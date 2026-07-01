@@ -122,7 +122,8 @@ function openGoogleReview() {
       <div class="review-profile-actions">
         <button class="review-act review-open" onclick="reviewOpen(${i})">Open</button>
         ${canWhatsApp
-          ? `<button class="review-act review-send" onclick="reviewSend(${i})">Send on WhatsApp</button>`
+          ? `<button class="review-act review-send" onclick="reviewSend(${i})">WhatsApp</button>
+             <button class="review-act review-sms" onclick="reviewSms(${i})">SMS</button>`
           : ``}
       </div>
     </div>`).join('');
@@ -206,10 +207,8 @@ function reviewOpen(i) {
   document.getElementById('review-chooser')?.remove();
 }
 
-function reviewSend(i) {
-  const p = GOOGLE_REVIEW_PROFILES[i];
-  const patient = State.currentPatient;
-  if (!p || !patient) return;
+// Build the review message + international phone for a given clinic profile
+function _reviewMessage(p, patient) {
   const phone = (patient.phone || '').replace(/\D/g, '');
   const intl = phone.length === 10 ? '91' + phone : phone;   // default India code
   const first = (patient.name || '').split(' ')[0] || 'there';
@@ -218,7 +217,25 @@ function reviewSend(i) {
     `Dear ${first}, thank you for visiting ${DOCTOR.name}.\n\n` +
     `We'd love your feedback — please tap below and rate your experience:\n${gateUrl}\n\n` +
     `— ${p.label}`;
+  return { intl, msg };
+}
+
+function reviewSend(i) {
+  const p = GOOGLE_REVIEW_PROFILES[i];
+  const patient = State.currentPatient;
+  if (!p || !patient) return;
+  const { intl, msg } = _reviewMessage(p, patient);
   window.open(`https://wa.me/${intl}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+  document.getElementById('review-chooser')?.remove();
+}
+
+function reviewSms(i) {
+  const p = GOOGLE_REVIEW_PROFILES[i];
+  const patient = State.currentPatient;
+  if (!p || !patient) return;
+  const { intl, msg } = _reviewMessage(p, patient);
+  // sms: URI opens the phone's default messaging app with the text prefilled
+  window.location.href = `sms:+${intl}?body=${encodeURIComponent(msg)}`;
   document.getElementById('review-chooser')?.remove();
 }
 
