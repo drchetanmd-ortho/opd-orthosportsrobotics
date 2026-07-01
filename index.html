@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -28,6 +29,9 @@
       </div>
     </div>
     <div class="tb-right">
+      <button class="tb-btn tb-btn-review" onclick="openGoogleReview()" title="Request a Google review">
+        <span>⭐</span> Review
+      </button>
       <button class="tb-btn tb-btn-backup" onclick="openBackupModal()" title="Backup / Restore">
         <span id="backup-status-icon">☁</span> Backup
       </button>
@@ -47,6 +51,9 @@
     </button>
     <button class="mob-nav-btn" onclick="openBackupModal()">
       <span id="mob-backup-icon">☁</span><span>Backup</span>
+    </button>
+    <button class="mob-nav-btn" onclick="openGoogleReview()">
+      <span>⭐</span><span>Review</span>
     </button>
   </nav>
 

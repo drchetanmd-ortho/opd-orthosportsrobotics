@@ -45,6 +45,138 @@ const DOCTOR = {
   ]
 };
 
+// ─── Google Review ────────────────────────────────────────────────────────────
+// Your Google Business Profile "write a review" links. Add/edit as needed.
+const GOOGLE_REVIEW_PROFILES = [
+  { label: "Aarna Orthopaedic Clinic",  code: "aarna",  url: "https://g.page/r/CbG5qO3MCVHOEAE/review" },
+  { label: "SPARSH Hospital Yelahanka", code: "sparsh", url: "https://g.page/r/CSV6MSTxo0qDEAE/review" }
+];
+
+// Hosted star-rating page (5★ → Google, lower → private feedback).
+// Update this to your GitHub Pages URL if it ever changes.
+const REVIEW_GATE_BASE = "https://drchetanmd-ortho.github.io/opd-orthosportsrobotics/review.html";
+
+// Opens a chooser; picking a profile either opens it, or (if a patient with a
+// phone is loaded) offers to send it to the patient via WhatsApp.
+function openGoogleReview() {
+  document.getElementById('review-chooser')?.remove();
+
+  const patient = State.currentPatient;
+  const phone = (patient?.phone || '').replace(/\D/g, '');
+  const canWhatsApp = phone.length >= 10;
+  const patientName = patient?.name ? esc(patient.name) : '';
+
+  const wrap = document.createElement('div');
+  wrap.id = 'review-chooser';
+  wrap.className = 'review-chooser-overlay';
+  wrap.onclick = e => { if (e.target === wrap) wrap.remove(); };
+
+  const rows = GOOGLE_REVIEW_PROFILES.map((p, i) => `
+    <div class="review-profile">
+      <div class="review-profile-name">⭐ ${esc(p.label)}</div>
+      <div class="review-profile-actions">
+        <button class="review-act review-open" onclick="reviewOpen(${i})">Open</button>
+        ${canWhatsApp
+          ? `<button class="review-act review-send" onclick="reviewSend(${i})">Send on WhatsApp</button>`
+          : ``}
+      </div>
+    </div>`).join('');
+
+  wrap.innerHTML = `
+    <div class="review-chooser-card">
+      <div class="review-chooser-head">
+        <span>Request a Google review</span>
+        <button onclick="document.getElementById('review-chooser').remove()">✕</button>
+      </div>
+      ${canWhatsApp
+        ? `<div class="review-chooser-sub">Send to ${patientName} · ${esc(patient.phone)}</div>`
+        : `<div class="review-chooser-sub">Open a profile to leave/share a review</div>`}
+      ${rows}
+      <button class="review-qr-link" onclick="showReviewQrModal()">📱 Show QR on screen</button>
+      <button class="review-qr-link" onclick="openReviewQrCards()">🖨 Print QR desk cards</button>
+    </div>`;
+  document.body.appendChild(wrap);
+}
+
+function openReviewQrCards() {
+  window.open(REVIEW_GATE_BASE.replace(/review\.html.*$/, 'qr.html'), '_blank', 'noopener');
+  document.getElementById('review-chooser')?.remove();
+}
+
+// On-screen QR modal — show a patient the code to scan right at the desk.
+function showReviewQrModal(startIdx) {
+  document.getElementById('review-chooser')?.remove();
+  document.getElementById('review-qr-modal')?.remove();
+
+  if (typeof QRCode === 'undefined') {
+    toast('QR library not loaded — check internet connection', 'error');
+    return;
+  }
+
+  let idx = startIdx || 0;
+  const wrap = document.createElement('div');
+  wrap.id = 'review-qr-modal';
+  wrap.className = 'review-chooser-overlay';
+  wrap.onclick = e => { if (e.target === wrap) wrap.remove(); };
+  wrap.innerHTML = `
+    <div class="review-qr-card">
+      <div class="review-chooser-head">
+        <span>Scan to leave a review</span>
+        <button onclick="document.getElementById('review-qr-modal').remove()">✕</button>
+      </div>
+      <div class="review-qr-tabs" id="review-qr-tabs"></div>
+      <div class="review-qr-name" id="review-qr-name"></div>
+      <div class="review-qr-box" id="review-qr-box"></div>
+      <div class="review-qr-hint">Ask the patient to scan with their phone camera</div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  const tabsEl = document.getElementById('review-qr-tabs');
+  tabsEl.innerHTML = GOOGLE_REVIEW_PROFILES.map((p, i) =>
+    `<button class="review-qr-tab" data-i="${i}" onclick="_renderReviewQr(${i})">${esc(p.label)}</button>`
+  ).join('');
+
+  window._renderReviewQr = function(i) {
+    idx = i;
+    const p = GOOGLE_REVIEW_PROFILES[i];
+    document.querySelectorAll('.review-qr-tab').forEach(b =>
+      b.classList.toggle('active', +b.dataset.i === i));
+    document.getElementById('review-qr-name').textContent = p.label;
+    const box = document.getElementById('review-qr-box');
+    box.innerHTML = '';
+    new QRCode(box, {
+      text: `${REVIEW_GATE_BASE}?c=${p.code}`,
+      width: 240, height: 240,
+      colorDark: '#0d2136', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  };
+  window._renderReviewQr(idx);
+}
+
+function reviewOpen(i) {
+  const p = GOOGLE_REVIEW_PROFILES[i];
+  if (!p) return;
+  window.open(p.url, '_blank', 'noopener');
+  document.getElementById('review-chooser')?.remove();
+}
+
+function reviewSend(i) {
+  const p = GOOGLE_REVIEW_PROFILES[i];
+  const patient = State.currentPatient;
+  if (!p || !patient) return;
+  const phone = (patient.phone || '').replace(/\D/g, '');
+  const intl = phone.length === 10 ? '91' + phone : phone;   // default India code
+  const first = (patient.name || '').split(' ')[0] || 'there';
+  const gateUrl = `${REVIEW_GATE_BASE}?c=${p.code}`;
+  const msg =
+    `Dear ${first}, thank you for visiting ${DOCTOR.name}.\n\n` +
+    `We'd love your feedback — please tap below and rate your experience:\n${gateUrl}\n\n` +
+    `— ${p.label}`;
+  window.open(`https://wa.me/${intl}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+  document.getElementById('review-chooser')?.remove();
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDate(ts) {
   if (!ts) return '';
@@ -568,6 +700,7 @@ function renderMedicineTable() {
           <input class="rx-med-comp" value="${m.content||''}" onchange="updateMedName(${idx},'content',this.value)" placeholder="Composition" title="Edit composition">
           <button class="rx-repo-btn ${inRepo ? 'rx-repo-saved' : ''}"
             onclick="toggleMedRepo(${idx})">${inRepo ? '★ Saved' : '☆ Save'}</button>
+          <button class="rx-remove-btn" onclick="removeMed(${idx})" title="Remove this medicine">✕ Remove</button>
         </td>
         <td>${rxSel(DOSAGE_OPTS, item.timings, idx, 'timings')}</td>
         <td>${rxSel(ADMIN_OPTS,  item.timingsNote||'After Food', idx, 'timingsNote')}</td>
