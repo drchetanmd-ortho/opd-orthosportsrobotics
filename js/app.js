@@ -22,6 +22,32 @@ function saveMedList() {
   try { localStorage.setItem(MEDS_KEY, JSON.stringify(MEDICINE_DB)); } catch (e) {}
 }
 
+// One-time migration: fold any medicines from the old "favourites"/custom stores
+// into the master list, then clear those legacy stores. Runs harmlessly every load.
+function migrateLegacyMedStores() {
+  let changed = false;
+  const have = new Set(MEDICINE_DB.map(m => String(m.id)));
+  let legacy = [];
+  try { legacy = legacy.concat(JSON.parse(localStorage.getItem('med_repository') || '[]')); } catch (e) {}
+  try { legacy = legacy.concat(JSON.parse(localStorage.getItem('custom_medicines') || '[]')); } catch (e) {}
+  legacy.forEach(m => {
+    if (!m || m.id == null || have.has(String(m.id))) return;
+    MEDICINE_DB.push({
+      id: m.id, brand: m.brand || '', content: m.content || '',
+      type: m.type || 'TAB', form: m.form || m.type || 'TAB',
+      timings: m.timings || '1-0-0', timingsNote: m.timingsNote || 'After Food',
+      frequency: m.frequency || 'Once Daily', duration: m.duration || '5 Days',
+      dose: m.dose || '1', qty: m.qty || '', indications: m.indications || []
+    });
+    have.add(String(m.id));
+    changed = true;
+  });
+  if (changed) saveMedList();
+  // Favourites feature removed — clear legacy stores so nothing lingers.
+  localStorage.removeItem('med_repository');
+  localStorage.removeItem('custom_medicines');
+}
+
 // ─── State ───────────────────────────────────────────────────────────────────
 const State = {
   currentPatient: null,
@@ -524,10 +550,9 @@ async function loadPatientById(id) {
 }
 
 function openNewPatientModal() {
-  // Reset gender toggle to Male
+  // Start with gender unselected — clinician chooses
   document.querySelectorAll('.np-gender-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector('.np-gender-btn[data-val="Male"]').classList.add('active');
-  document.getElementById('np-gender').value = 'Male';
+  document.getElementById('np-gender').value = '';
   const modal = document.getElementById('modal-new-patient');
   modal.style.display = 'flex';
   modal.classList.add('open');
@@ -709,25 +734,22 @@ function renderMedicineTable() {
 
   const rows = State.medicines.map((item, idx) => {
     const m = item.med;
-    const inRepo = isMedInRepo(m.id);
     return `
       <tr class="rx-row">
         <td class="rx-num">${idx + 1}</td>
         <td>${rxSel(TYPE_OPTS, m.type, idx, 'type')}</td>
         <td class="rx-med-cell">
-          <input class="rx-med-name" value="${m.brand}" onchange="updateMedName(${idx},'brand',this.value)" title="Edit medicine name">
-          <input class="rx-med-comp" value="${m.content||''}" onchange="updateMedName(${idx},'content',this.value)" placeholder="Composition" title="Edit composition">
-          <button class="rx-repo-btn ${inRepo ? 'rx-repo-saved' : ''}"
-            onclick="toggleMedRepo(${idx})">${inRepo ? '★ Saved' : '☆ Save'}</button>
+          <input class="rx-med-name" value="${esc(m.brand)}" onchange="updateMedName(${idx},'brand',this.value)" title="Edit medicine name">
+          <input class="rx-med-comp" value="${esc(m.content||'')}" onchange="updateMedName(${idx},'content',this.value)" placeholder="Composition" title="Edit composition">
           <button class="rx-remove-btn" onclick="removeMed(${idx})" title="Remove this medicine">✕ Remove</button>
         </td>
         <td>${rxSel(DOSAGE_OPTS, item.timings, idx, 'timings')}</td>
         <td>${rxSel(ADMIN_OPTS,  item.timingsNote||'After Food', idx, 'timingsNote')}</td>
         <td>${rxSel(FREQ_OPTS,   item.frequency||'Once Daily',   idx, 'frequency')}</td>
         <td>${rxSel(DUR_OPTS,    item.duration,  idx, 'duration')}</td>
-        <td><input class="rx-input rx-qty" value="${item.qty||''}" onchange="updateMed(${idx},'qty',this.value)" placeholder="Qty"></td>
-        <td><input class="rx-input rx-details" value="${item.details||''}" onchange="updateMed(${idx},'details',this.value)" placeholder="Details…"></td>
-        <td><input class="rx-input rx-notes" value="${item.notes||''}" onchange="updateMed(${idx},'notes',this.value)" placeholder="Notes…"></td>
+        <td><input class="rx-input rx-qty" value="${esc(item.qty||'')}" onchange="updateMed(${idx},'qty',this.value)" placeholder="Qty"></td>
+        <td><input class="rx-input rx-details" value="${esc(item.details||'')}" onchange="updateMed(${idx},'details',this.value)" placeholder="Details…"></td>
+        <td><input class="rx-input rx-notes" value="${esc(item.notes||'')}" onchange="updateMed(${idx},'notes',this.value)" placeholder="Notes…"></td>
         <td><button class="btn-icon btn-del" onclick="removeMed(${idx})" title="Remove">✕</button></td>
       </tr>
     `;
@@ -753,24 +775,6 @@ function renderMedicineTable() {
 function updateMedName(idx, field, value) {
   if (!State.medicines[idx]) return;
   State.medicines[idx].med[field] = value;
-}
-
-function toggleMedRepo(idx) {
-  const item = State.medicines[idx];
-  if (!item) return;
-  if (isMedInRepo(item.med.id)) {
-    // Unstar — remove from repo
-    const repo = getRepo().filter(r => r.id !== item.med.id);
-    saveRepo(repo);
-    const custom = getCustomMeds().filter(m => m.id !== item.med.id);
-    localStorage.setItem(CUSTOM_MEDS_KEY, JSON.stringify(custom));
-    toast(item.med.brand + ' removed from saved list');
-  } else {
-    saveMedToRepo(idx);
-    return; // saveMedToRepo calls renderMedicineTable itself
-  }
-  renderMedicineTable();
-  renderMedBrowserList();
 }
 
 function updateMed(idx, field, value) {
@@ -842,9 +846,7 @@ function rxInlineSearch(query) {
   const input = document.getElementById('rx-inline-search');
   const resultsEl = _getRxDropdown();
 
-  // Merge MEDICINE_DB + repo/custom so inline search finds all medicines
-  const allMeds = [...MEDICINE_DB];
-  getRepo().forEach(r => { if (!allMeds.some(m => String(m.id) === String(r.id))) allMeds.push(r); });
+  const allMeds = MEDICINE_DB;
   const results = query.trim()
     ? allMeds.filter(m => {
         const q = query.toLowerCase();
@@ -872,7 +874,7 @@ function rxInlineSearch(query) {
   resultsEl.style.display = 'block';
   resultsEl.innerHTML = results.map(med => {
     const already = State.medicines.some(m => String(m.med.id) === String(med.id));
-    return `<div class="rx-inline-opt${already ? ' rx-inline-added' : ''}" onclick="${already ? '' : `rxInlinePick(${JSON.stringify(med.id)})`}">
+    return `<div class="rx-inline-opt${already ? ' rx-inline-added' : ''}" onclick="${already ? '' : `rxInlinePick('${String(med.id).replace(/'/g, "\\'")}')`}">
       <span class="rx-inline-type" style="${typeBadgeStyle(med.type)}">${med.type}</span>
       <span class="rx-inline-brand">${esc(med.brand)}</span>
       <span class="rx-inline-content">${esc(med.content)}</span>
@@ -882,66 +884,11 @@ function rxInlineSearch(query) {
 }
 
 function rxInlinePick(medId) {
-  // IDs may be numeric (MEDICINE_DB) or string (custom) — compare as strings
-  const med = [...MEDICINE_DB, ...getRepo()].find(m => String(m.id) === String(medId));
+  // IDs may be numeric (seed) or string (custom) — compare as strings
+  const med = MEDICINE_DB.find(m => String(m.id) === String(medId));
   if (!med) return;
   _getRxDropdown().style.display = 'none';
   addMedicine(med);
-}
-
-// ─── Medicine Repository (saved presets) ──────────────────────────────────────
-const REPO_KEY = 'med_repository';
-
-function getRepo() {
-  try { return JSON.parse(localStorage.getItem(REPO_KEY) || '[]'); } catch(e) { return []; }
-}
-
-function saveRepo(repo) {
-  localStorage.setItem(REPO_KEY, JSON.stringify(repo));
-}
-
-function isMedInRepo(medId) {
-  return getRepo().some(r => r.id === medId);
-}
-
-function saveMedToRepo(idx) {
-  const item = State.medicines[idx];
-  if (!item) return;
-  const repo = getRepo();
-  const existing = repo.findIndex(r => r.id === item.med.id);
-  const entry = {
-    id: item.med.id, brand: item.med.brand, content: item.med.content,
-    type: item.med.type, form: item.med.form || '',
-    timings: item.timings, timingsNote: item.timingsNote,
-    frequency: item.frequency, duration: item.duration,
-    qty: item.qty, details: item.details || '', notes: item.notes || ''
-  };
-  if (existing >= 0) repo[existing] = entry; else repo.push(entry);
-  saveRepo(repo);
-  renderMedicineTable();
-  refreshAlphaList();
-  toast(`★ ${item.med.brand} saved to repository`);
-}
-
-function addRepoMedicine(repoEntry) {
-  if (!repoEntry) return;
-  if (State.medicines.findIndex(m => String(m.med.id) === String(repoEntry.id)) >= 0) {
-    toast(`${repoEntry.brand} already added`, 'warning'); return;
-  }
-  const baseMed = MEDICINE_DB.find(m => m.id === repoEntry.id) || {
-    id: repoEntry.id, brand: repoEntry.brand, content: repoEntry.content,
-    type: repoEntry.type, form: repoEntry.form || ''
-  };
-  State.medicines.push({
-    med: baseMed,
-    timings: repoEntry.timings, timingsNote: repoEntry.timingsNote,
-    frequency: repoEntry.frequency, duration: repoEntry.duration,
-    qty: repoEntry.qty || '', details: repoEntry.details || '', notes: repoEntry.notes || ''
-  });
-  renderMedicineTable();
-  refreshAlphaList();
-  setTimeout(() => { const el = document.getElementById('rx-inline-search'); if (el) el.focus(); }, 50);
-  toast(`✓ Added ${repoEntry.brand}`);
 }
 
 // Close inline results when clicking outside
@@ -952,13 +899,8 @@ document.addEventListener('click', e => {
   }
 });
 
-// ─── Add New Medicine Modal ───────────────────────────────────────────────────
-const CUSTOM_MEDS_KEY = 'custom_medicines';
-function getCustomMeds() {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_MEDS_KEY) || '[]'); } catch(e) { return []; }
-}
-
-// Permanently delete a medicine from the master list (and any saved copy).
+// ─── Add / Delete Medicine ────────────────────────────────────────────────────
+// Permanently delete a medicine from the master list.
 function deleteMed(id) {
   const target = MEDICINE_DB.find(m => String(m.id) === String(id));
   const brand = target ? target.brand : 'this medicine';
@@ -966,21 +908,39 @@ function deleteMed(id) {
   const before = MEDICINE_DB.length;
   MEDICINE_DB = MEDICINE_DB.filter(m => String(m.id) !== String(id));
   saveMedList();
-  // Also drop it from the saved (starred) repo + custom stores if present
-  saveRepo(getRepo().filter(r => String(r.id) !== String(id)));
-  localStorage.setItem(CUSTOM_MEDS_KEY, JSON.stringify(getCustomMeds().filter(m => String(m.id) !== String(id))));
   renderMedBrowserList();
   if (MEDICINE_DB.length < before) toast(`${brand} deleted`);
 }
 
 function openAddMedModal() {
   document.getElementById('modal-add-med').style.display = 'flex';
+  switchAddTab('manual');
   setTimeout(() => document.getElementById('nm-brand').focus(), 50);
 }
 
 function closeAddMedModal() {
   document.getElementById('modal-add-med').style.display = 'none';
-  ['nm-brand','nm-content'].forEach(id => document.getElementById(id).value = '');
+  ['nm-brand','nm-content'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const paste = document.getElementById('am-paste-text'); if (paste) paste.value = '';
+  const status = document.getElementById('am-paste-status'); if (status) status.textContent = '';
+  const preview = document.getElementById('am-paste-preview'); if (preview) preview.style.display = 'none';
+}
+
+function switchAddTab(which) {
+  document.getElementById('am-tab-manual').classList.toggle('active', which === 'manual');
+  document.getElementById('am-tab-paste').classList.toggle('active', which === 'paste');
+  document.getElementById('am-pane-manual').style.display = which === 'manual' ? 'flex' : 'none';
+  document.getElementById('am-pane-paste').style.display  = which === 'paste'  ? 'block' : 'none';
+}
+
+// Decide: single link → analyze; otherwise treat as a pasted list
+function smartAddFromPaste() {
+  const raw = (document.getElementById('am-paste-text').value || '').trim();
+  if (!raw) { toast('Paste a link or a list first', 'error'); return; }
+  const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const isSingleLink = lines.length === 1 && /^https?:\/\//i.test(lines[0]);
+  if (isSingleLink) importFromLink(lines[0]);
+  else importMedList(raw);
 }
 
 function saveNewMed() {
@@ -1007,26 +967,7 @@ function saveNewMed() {
   toast('✓ ' + brand + ' added to medicine list');
 }
 
-// ─── Import Medicines (bulk paste + link) ─────────────────────────────────────
-function openImportMedModal() {
-  document.getElementById('modal-import-med').style.display = 'flex';
-  switchImportTab('list');
-  setTimeout(() => document.getElementById('imp-list-text')?.focus(), 50);
-}
-function closeImportMedModal() {
-  document.getElementById('modal-import-med').style.display = 'none';
-  document.getElementById('imp-list-text').value = '';
-  document.getElementById('imp-link-url').value = '';
-  document.getElementById('imp-link-status').textContent = '';
-  document.getElementById('imp-link-preview').style.display = 'none';
-}
-function switchImportTab(which) {
-  document.getElementById('imp-tab-list').classList.toggle('active', which === 'list');
-  document.getElementById('imp-tab-link').classList.toggle('active', which === 'link');
-  document.getElementById('imp-pane-list').style.display = which === 'list' ? 'block' : 'none';
-  document.getElementById('imp-pane-link').style.display = which === 'link' ? 'block' : 'none';
-}
-
+// ─── Import Medicines (paste list or link) ────────────────────────────────────
 // Guess medicine type/form from free text
 function guessMedType(text) {
   const t = (text || '').toLowerCase();
@@ -1056,8 +997,8 @@ function parseMedLine(line) {
   return { brand: brand.trim(), content: content.trim(), type };
 }
 
-function importMedList() {
-  const raw = document.getElementById('imp-list-text').value;
+function importMedList(text) {
+  const raw = text != null ? text : document.getElementById('am-paste-text').value;
   const lines = raw.split(/\r?\n/);
   const parsed = lines.map(parseMedLine).filter(Boolean);
   if (!parsed.length) { toast('Nothing to import — paste some medicines first', 'error'); return; }
@@ -1077,7 +1018,7 @@ function importMedList() {
     added++;
   });
   saveMedList();
-  closeImportMedModal();
+  closeAddMedModal();
   refreshAlphaList();
   toast(`✓ Imported ${added} medicine${added !== 1 ? 's' : ''}${skipped ? ` · ${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped` : ''}`, 'success', 3500);
 }
@@ -1120,20 +1061,20 @@ function cleanTitle(title) {
     .replace(/\s{2,}/g, ' ').trim();
 }
 
-async function importFromLink() {
-  const url = document.getElementById('imp-link-url').value.trim();
-  const statusEl = document.getElementById('imp-link-status');
-  const previewEl = document.getElementById('imp-link-preview');
+async function importFromLink(linkUrl) {
+  const url = (linkUrl || '').trim();
+  const statusEl = document.getElementById('am-paste-status');
+  const previewEl = document.getElementById('am-paste-preview');
   if (!url || !/^https?:\/\//i.test(url)) { statusEl.textContent = 'Please paste a full link starting with http…'; return; }
 
   // No internet → can't read the page. Ask user to enter details manually.
   if (!navigator.onLine) {
     statusEl.textContent = '⚠ No internet connection — please enter the details manually below.';
-    document.getElementById('imp-pv-brand').value = brandFromSlug(url);
-    document.getElementById('imp-pv-content').value = '';
-    document.getElementById('imp-pv-type').value = guessMedType(url);
+    document.getElementById('am-pv-brand').value = brandFromSlug(url);
+    document.getElementById('am-pv-content').value = '';
+    document.getElementById('am-pv-type').value = guessMedType(url);
     previewEl.style.display = 'block';
-    document.getElementById('imp-pv-brand').focus();
+    document.getElementById('am-pv-brand').focus();
     return;
   }
 
@@ -1158,33 +1099,87 @@ async function importFromLink() {
   }
 
   if (!brand) brand = brandFromSlug(url);
-  document.getElementById('imp-pv-brand').value = brand;
-  document.getElementById('imp-pv-content').value = content;
-  document.getElementById('imp-pv-type').value = guessMedType(brand + ' ' + content + ' ' + url);
+  document.getElementById('am-pv-brand').value = brand;
+  document.getElementById('am-pv-content').value = content;
+  document.getElementById('am-pv-type').value = guessMedType(brand + ' ' + content + ' ' + url);
   previewEl.style.display = 'block';
 }
 
 function addImportedFromLink() {
-  const brand = document.getElementById('imp-pv-brand').value.trim();
+  const brand = document.getElementById('am-pv-brand').value.trim();
   if (!brand) { toast('Brand name is required', 'error'); return; }
   MEDICINE_DB.push({
     id: 'cm_' + Date.now(),
     brand,
-    content: document.getElementById('imp-pv-content').value.trim(),
-    type: document.getElementById('imp-pv-type').value,
-    form: document.getElementById('imp-pv-type').value,
+    content: document.getElementById('am-pv-content').value.trim(),
+    type: document.getElementById('am-pv-type').value,
+    form: document.getElementById('am-pv-type').value,
     timings: '1-0-0', timingsNote: 'After Food', frequency: 'Once Daily',
     duration: '5 Days', dose: '1', qty: '', indications: []
   });
   saveMedList();
-  closeImportMedModal();
+  closeAddMedModal();
   refreshAlphaList();
   toast('✓ ' + brand + ' added to medicine list');
 }
 
 // ─── Medicine Browser (flat alphabetical list) ────────────────────────────────
 function initMedAlphaBrowser() {
+  migrateLegacyMedStores();
   renderMedBrowserList();
+  bindMedRowLongPress();
+}
+
+// Reveal a row's delete ✕ only after a long/hard press — prevents accidental deletes.
+function bindMedRowLongPress() {
+  const list = document.getElementById('med-alpha-list');
+  if (!list || list._delBound) return;
+  list._delBound = true;
+
+  let timer = null, sx = 0, sy = 0, suppressClick = false;
+  const clearTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  const disarm = () => list.querySelectorAll('.med-alpha-row.del-armed')
+    .forEach(r => r.classList.remove('del-armed'));
+
+  // Swallow the click that fires when releasing a long-press (so it doesn't
+  // also add the medicine to the prescription).
+  list.addEventListener('click', e => {
+    if (suppressClick && !e.target.closest('.med-del-btn')) {
+      e.preventDefault(); e.stopPropagation(); suppressClick = false;
+    }
+  }, true);
+
+  list.addEventListener('pointerdown', e => {
+    suppressClick = false;
+    if (e.target.closest('.med-del-btn')) return;          // pressing the ✕ itself
+    const row = e.target.closest('.med-alpha-row');
+    if (!row) return;
+    sx = e.clientX; sy = e.clientY;
+    clearTimer();
+    timer = setTimeout(() => {
+      disarm();
+      row.classList.add('del-armed');
+      suppressClick = true;
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 550);
+  });
+  list.addEventListener('pointermove', e => {
+    if (timer && (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10)) clearTimer();
+  }, { passive: true });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+    list.addEventListener(ev, clearTimer, { passive: true }));
+  list.addEventListener('scroll', clearTimer, { passive: true });
+
+  // Right-click also arms it (handy on desktop)
+  list.addEventListener('contextmenu', e => {
+    const row = e.target.closest('.med-alpha-row');
+    if (row) { e.preventDefault(); disarm(); row.classList.add('del-armed'); }
+  });
+
+  // Tapping/clicking anywhere else disarms
+  document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.med-alpha-row.del-armed') && !e.target.closest('.med-del-btn')) disarm();
+  });
 }
 
 function refreshAlphaList() {
@@ -1195,44 +1190,24 @@ function refreshAlphaList() {
 function renderMedBrowserList(query) {
   const list = document.getElementById('med-alpha-list');
   if (!list) return;
-  const repo = getRepo();
-  const repoIds = new Set(repo.map(r => r.id));
-  const added = new Set(State.medicines.map(m => m.med.id));
+  const added = new Set(State.medicines.map(m => String(m.med.id)));
   const q = (query || '').toLowerCase();
 
   const matchesMed = (brand, content) =>
-    !q || brand.toLowerCase().includes(q) || (content || '').toLowerCase().includes(q);
+    !q || (brand || '').toLowerCase().includes(q) || (content || '').toLowerCase().includes(q);
 
   const hl = str => {
-    if (!q) return str;
+    const safe = esc(str || '');
+    if (!q) return safe;
     const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    return str.replace(re, '<mark>$1</mark>');
+    return safe.replace(re, '<mark>$1</mark>');
   };
 
-  // Saved/custom medicines (repo) — shown first, starred, with remove option
-  const repoRows = [...repo]
-    .filter(r => matchesMed(r.brand, r.content))
-    .sort((a, b) => a.brand.localeCompare(b.brand))
-    .map(r => {
-      const isAdded = added.has(r.id);
-      const clickAction = isAdded ? '' : `addRepoMedicine(getRepo().find(x=>String(x.id)==='${r.id}'))`;
-      return `<div class="med-alpha-row med-alpha-repo ${isAdded ? 'med-alpha-added' : ''}">
-        <span class="med-alpha-badge" style="${typeBadgeStyle(r.type)}">${r.type}</span>
-        <div class="med-alpha-info" onclick="${clickAction}" style="cursor:${isAdded?'default':'pointer'};flex:1">
-          <div class="med-alpha-brand">★ ${hl(r.brand)}</div>
-          <div class="med-alpha-content">${r.timings} · ${r.timingsNote} · ${r.duration}</div>
-        </div>
-        ${isAdded ? '<span class="med-alpha-tick">✓</span>' : ''}
-        <button class="med-unstar-btn" title="Remove from saved list" onclick="event.stopPropagation();removeMedFromRepo('${r.id}')">★</button>
-      </div>`;
-    }).join('');
-
-  // Built-in medicines not in repo
-  const builtinRows = MEDICINE_DB
-    .filter(m => !repoIds.has(m.id) && matchesMed(m.brand, m.content))
-    .sort((a, b) => a.brand.localeCompare(b.brand))
+  const rows = MEDICINE_DB
+    .filter(m => matchesMed(m.brand, m.content))
+    .sort((a, b) => (a.brand || '').localeCompare(b.brand || ''))
     .map(m => {
-      const isAdded = added.has(m.id);
+      const isAdded = added.has(String(m.id));
       const idx = MEDICINE_DB.indexOf(m);
       return `<div class="med-alpha-row ${isAdded ? 'med-alpha-added' : ''}">
         <span class="med-alpha-badge" style="${typeBadgeStyle(m.type)}">${m.type}</span>
@@ -1245,27 +1220,14 @@ function renderMedBrowserList(query) {
       </div>`;
     }).join('');
 
-  if (!repoRows && !builtinRows) {
-    list.innerHTML = `<div style="padding:12px;font-size:12px;color:var(--text3)">No medicines found for "${q}"</div>`;
+  if (!rows) {
+    list.innerHTML = q
+      ? `<div style="padding:12px;font-size:12px;color:var(--text3)">No medicines found for "${esc(q)}"</div>`
+      : `<div style="padding:16px;font-size:12.5px;color:var(--text3);text-align:center">
+          No medicines yet.<br>Use <b>＋ Add Medicine</b> to build your list.</div>`;
     return;
   }
-  const divider = repoRows && builtinRows
-    ? '<div class="med-alpha-divider">All medicines</div>' : '';
-  if (!repoRows && !builtinRows && !q) {
-    list.innerHTML = `<div style="padding:16px;font-size:12.5px;color:var(--text3);text-align:center">
-      No medicines yet.<br>Use <b>＋ Add New</b> or <b>Import</b> to build your list.</div>`;
-    return;
-  }
-  list.innerHTML = repoRows + divider + builtinRows;
-}
-
-function removeMedFromRepo(id) {
-  const repo = getRepo().filter(r => r.id !== id);
-  saveRepo(repo);
-  // Also remove from custom meds if it was custom
-  const custom = getCustomMeds().filter(m => m.id !== id);
-  localStorage.setItem(CUSTOM_MEDS_KEY, JSON.stringify(custom));
-  renderMedBrowserList();
+  list.innerHTML = rows;
 }
 
 // ─── Medicine Search / Dropdown ────────────────────────────────────────────────
@@ -2397,6 +2359,8 @@ function purgeRemovedMedicines() {
       if (cleaned.length !== list.length) localStorage.setItem(key, JSON.stringify(cleaned));
     } catch(e) {}
   });
+  const cleaned = MEDICINE_DB.filter(m => !PURGE.includes(m.brand));
+  if (cleaned.length !== MEDICINE_DB.length) { MEDICINE_DB = cleaned; saveMedList(); }
 }
 
 let _logoDataUrl = null;
@@ -2534,9 +2498,11 @@ async function exportBackup() {
   const visitArrays = await Promise.all(patients.map(p => DB.getPatientVisits(p.id)));
   const allVisits = visitArrays.flat();
   const data = {
-    version: 2, exportedAt: new Date().toISOString(),
+    version: 3, exportedAt: new Date().toISOString(),
     clinic: "Aarna Orthopaedic Clinic",
     patients, visits: allVisits, templates,
+    medList: JSON.parse(localStorage.getItem(MEDS_KEY) || "[]"),
+    // kept for backward-compatible restores of older backups
     medRepository: JSON.parse(localStorage.getItem("med_repository") || "[]")
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -2593,8 +2559,19 @@ async function importBackup(input) {
       try { await DB.saveTemplate(t); } catch(e) { errors++; }
     }
   }
-  if (data.medRepository && Array.isArray(data.medRepository)) {
-    localStorage.setItem("med_repository", JSON.stringify(data.medRepository));
+  // Restore the medicine list (new backups use medList; older ones used medRepository)
+  const restoredMeds = Array.isArray(data.medList) ? data.medList
+    : (Array.isArray(data.medRepository) ? data.medRepository : null);
+  if (restoredMeds) {
+    const have = new Set(MEDICINE_DB.map(m => String(m.id)));
+    restoredMeds.forEach(m => {
+      if (m && m.id != null && !have.has(String(m.id))) {
+        MEDICINE_DB.push(m);
+        have.add(String(m.id));
+      }
+    });
+    saveMedList();
+    refreshAlphaList();
   }
 
   await initPatientPanel();
@@ -2702,9 +2679,10 @@ async function gdriveBackupNow() {
     const visitArrays = await Promise.all(patients.map(p => DB.getPatientVisits(p.id)));
     const allVisits = visitArrays.flat();
     const data = {
-      version: 2, exportedAt: new Date().toISOString(),
+      version: 3, exportedAt: new Date().toISOString(),
       clinic: "Aarna Orthopaedic Clinic",
       patients, visits: allVisits, templates,
+      medList: JSON.parse(localStorage.getItem(MEDS_KEY) || "[]"),
       medRepository: JSON.parse(localStorage.getItem("med_repository") || "[]")
     };
     const json = JSON.stringify(data);

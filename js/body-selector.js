@@ -136,7 +136,7 @@ function selectBodyPart(partId) {
     </div>
     <div class="bep-actions">
       <button class="bep-btn" onclick="fillExamField('field-hopi','${encodeField(tmpl.history)}')">Fill History</button>
-      <button class="bep-btn bep-btn-primary" onclick="fillExamField('field-examination','${encodeField(tmpl.examination)}')">Fill Examination</button>
+      <button class="bep-btn" onclick="fillExamField('field-examination','${encodeField(tmpl.examination)}')">Fill Examination</button>
       <button class="bep-btn" onclick="fillExamField('field-investigations','${encodeField(tmpl.investigations)}')">Fill Investigations</button>
       <button class="bep-btn" onclick="fillExamField('field-advice','${encodeField(tmpl.advice)}')">Fill Advice</button>
     </div>

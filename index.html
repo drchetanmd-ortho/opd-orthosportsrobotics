@@ -367,10 +367,7 @@
       <div class="right-section" id="med-alpha-section">
         <div class="rp-section-header">
           <span>Medicines</span>
-          <span style="display:flex;gap:6px;">
-            <button class="btn-add-template" onclick="openImportMedModal()">⇪ Import</button>
-            <button class="btn-add-template" onclick="openAddMedModal()">＋ Add New</button>
-          </span>
+          <button class="btn-add-template" onclick="openAddMedModal()">＋ Add Medicine</button>
         </div>
         <div id="med-alpha-list" class="med-alpha-list"></div>
       </div>
@@ -420,14 +417,14 @@
           <div class="np-field">
             <label class="np-label">Gender <span class="np-req">*</span></label>
             <div class="np-gender-group" id="np-gender-group">
-              <button type="button" class="np-gender-btn active" data-val="Male" onclick="npSetGender('Male')">Male</button>
+              <button type="button" class="np-gender-btn" data-val="Male" onclick="npSetGender('Male')">Male</button>
               <button type="button" class="np-gender-btn" data-val="Female" onclick="npSetGender('Female')">Female</button>
             </div>
             <input type="hidden" id="np-gender" value="Male">
           </div>
           <div class="np-field">
             <label class="np-label">Age (Years)</label>
-            <input id="np-age" class="np-input" type="number" placeholder="35" min="0" max="120">
+            <input id="np-age" class="np-input" type="number" placeholder="e.g. 35" min="0" max="120">
           </div>
           <div class="np-field">
             <label class="np-label">Date of Birth</label>
@@ -451,11 +448,11 @@
         <div class="np-row np-row-3">
           <div class="np-field">
             <label class="np-label">Height (cm)</label>
-            <input id="np-height" class="np-input" type="number" placeholder="170" min="50" max="250" oninput="calcBMI()">
+            <input id="np-height" class="np-input" type="number" placeholder="e.g. 170" min="50" max="250" oninput="calcBMI()">
           </div>
           <div class="np-field">
             <label class="np-label">Weight (kg)</label>
-            <input id="np-weight" class="np-input" type="number" placeholder="70" min="1" max="300" oninput="calcBMI()">
+            <input id="np-weight" class="np-input" type="number" placeholder="e.g. 70" min="1" max="300" oninput="calcBMI()">
           </div>
           <div class="np-field">
             <label class="np-label">BMI</label>
@@ -714,120 +711,99 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
-<!-- Add New Medicine Modal -->
+<!-- Add Medicine Modal (manual entry OR paste/link) -->
 <div id="modal-add-med" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddMedModal()">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:460px">
     <div class="modal-header">
-      <h3>Add New Medicine</h3>
+      <h3>Add Medicine</h3>
       <button class="modal-close" onclick="closeAddMedModal()">✕</button>
-    </div>
-    <div class="modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
-      <div style="display:flex;gap:8px;">
-        <div style="flex:1">
-          <label class="modal-label">Brand Name *</label>
-          <input id="nm-brand" class="modal-input" placeholder="e.g. Calcirol" autocomplete="off">
-        </div>
-        <div style="width:90px">
-          <label class="modal-label">Type</label>
-          <select id="nm-type" class="modal-input">
-            <option>TAB</option><option>CAP</option><option>SYP</option>
-            <option>INJ</option><option>GEL</option><option>SPRAY</option>
-            <option>DROPS</option><option>PWD</option><option>CREAM</option><option>OINT</option>
-          </select>
-        </div>
-      </div>
-      <div>
-        <label class="modal-label">Composition / Content</label>
-        <input id="nm-content" class="modal-input" placeholder="e.g. Calcium + Vitamin D3">
-      </div>
-      <div style="display:flex;gap:8px;">
-        <div style="flex:1">
-          <label class="modal-label">Default Dosage</label>
-          <select id="nm-dosage" class="modal-input">
-            <option>1-0-0</option><option>0-1-0</option><option>0-0-1</option>
-            <option>1-1-0</option><option>1-0-1</option><option>0-1-1</option>
-            <option>1-1-1</option><option>1-1-1-1</option><option>SOS</option><option>As Directed</option>
-          </select>
-        </div>
-        <div style="flex:1">
-          <label class="modal-label">Administration</label>
-          <select id="nm-admin" class="modal-input">
-            <option>After Food</option><option>Before Food</option><option>Empty Stomach</option>
-            <option>With Food</option><option>At Bedtime</option><option>With Milk</option><option>As Directed</option>
-          </select>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <div style="flex:1">
-          <label class="modal-label">Frequency</label>
-          <select id="nm-freq" class="modal-input">
-            <option>Once Daily</option><option>Twice Daily</option><option>Thrice Daily</option>
-            <option>Four Times Daily</option><option>Weekly</option><option>Alternate Days</option>
-            <option>SOS</option><option>As Directed</option>
-          </select>
-        </div>
-        <div style="flex:1">
-          <label class="modal-label">Duration</label>
-          <select id="nm-dur" class="modal-input">
-            <option>5 Days</option><option>7 Days</option><option>10 Days</option>
-            <option>14 Days</option><option>1 Month</option><option>2 Months</option>
-            <option>3 Months</option><option>6 Months</option><option>As Directed</option>
-          </select>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:4px;">
-        <button class="btn-primary" style="flex:1" onclick="saveNewMed()">Save to Medicine List</button>
-        <button class="btn-secondary" onclick="closeAddMedModal()">Cancel</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Import Medicines Modal -->
-<div id="modal-import-med" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeImportMedModal()">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-header">
-      <h3>Import Medicines</h3>
-      <button class="modal-close" onclick="closeImportMedModal()">✕</button>
     </div>
     <div class="modal-body" style="padding:0;">
       <div class="imp-tabs">
-        <button class="imp-tab active" id="imp-tab-list" onclick="switchImportTab('list')">Paste a list</button>
-        <button class="imp-tab" id="imp-tab-link" onclick="switchImportTab('link')">From a link</button>
+        <button class="imp-tab active" id="am-tab-manual" onclick="switchAddTab('manual')">Enter manually</button>
+        <button class="imp-tab" id="am-tab-paste" onclick="switchAddTab('paste')">Paste / link</button>
       </div>
 
-      <!-- Paste list -->
-      <div class="imp-pane" id="imp-pane-list" style="padding:16px 20px;">
-        <label class="modal-label">Paste medicines — one per line</label>
-        <p class="imp-help">Format: <b>Brand — Composition</b>. Type (TAB/CAP/INJ…) is auto-detected. Examples:</p>
-        <pre class="imp-example">Gemidro 150 mg - Risedronate Sodium 150 mg
-Gemtide inj - Teriparatide 20 mcg / pre-filled syringe
-GutGermina cap - Saccharomyces boulardii 250 mg</pre>
-        <textarea id="imp-list-text" class="imp-textarea" placeholder="Paste your list here…"></textarea>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="btn-primary" style="flex:1" onclick="importMedList()">Add all to list</button>
-          <button class="btn-secondary" onclick="closeImportMedModal()">Cancel</button>
-        </div>
-      </div>
-
-      <!-- From link -->
-      <div class="imp-pane" id="imp-pane-link" style="display:none;padding:16px 20px;">
-        <label class="modal-label">Paste a medicine web link</label>
-        <p class="imp-help">Works best with 1mg, PharmEasy, Netmeds, Apollo. The app tries to read the name & composition — please review before adding (it may not read every page correctly).</p>
+      <!-- Enter manually -->
+      <div id="am-pane-manual" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
         <div style="display:flex;gap:8px;">
-          <input id="imp-link-url" class="modal-input" placeholder="https://…" autocomplete="off" style="flex:1">
-          <button class="btn-primary" onclick="importFromLink()">Read</button>
+          <div style="flex:1">
+            <label class="modal-label">Brand Name *</label>
+            <input id="nm-brand" class="modal-input" placeholder="e.g. Calcirol" autocomplete="off">
+          </div>
+          <div style="width:90px">
+            <label class="modal-label">Type</label>
+            <select id="nm-type" class="modal-input">
+              <option>TAB</option><option>CAP</option><option>SYP</option>
+              <option>INJ</option><option>GEL</option><option>SPRAY</option>
+              <option>DROPS</option><option>PWD</option><option>CREAM</option><option>OINT</option>
+            </select>
+          </div>
         </div>
-        <div id="imp-link-status" class="imp-status"></div>
-        <div id="imp-link-preview" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+        <div>
+          <label class="modal-label">Composition / Content</label>
+          <input id="nm-content" class="modal-input" placeholder="e.g. Calcium + Vitamin D3">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1">
+            <label class="modal-label">Default Dosage</label>
+            <select id="nm-dosage" class="modal-input">
+              <option>1-0-0</option><option>0-1-0</option><option>0-0-1</option>
+              <option>1-1-0</option><option>1-0-1</option><option>0-1-1</option>
+              <option>1-1-1</option><option>1-1-1-1</option><option>SOS</option><option>As Directed</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label class="modal-label">Administration</label>
+            <select id="nm-admin" class="modal-input">
+              <option>After Food</option><option>Before Food</option><option>Empty Stomach</option>
+              <option>With Food</option><option>At Bedtime</option><option>With Milk</option><option>As Directed</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1">
+            <label class="modal-label">Frequency</label>
+            <select id="nm-freq" class="modal-input">
+              <option>Once Daily</option><option>Twice Daily</option><option>Thrice Daily</option>
+              <option>Four Times Daily</option><option>Weekly</option><option>Alternate Days</option>
+              <option>SOS</option><option>As Directed</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label class="modal-label">Duration</label>
+            <select id="nm-dur" class="modal-input">
+              <option>5 Days</option><option>7 Days</option><option>10 Days</option>
+              <option>14 Days</option><option>1 Month</option><option>2 Months</option>
+              <option>3 Months</option><option>6 Months</option><option>As Directed</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button class="btn-primary" style="flex:1" onclick="saveNewMed()">Add to Medicine List</button>
+          <button class="btn-secondary" onclick="closeAddMedModal()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Paste / link -->
+      <div id="am-pane-paste" style="display:none;padding:16px 20px;">
+        <label class="modal-label">Paste a web link, or a list of medicines</label>
+        <p class="imp-help">Paste one <b>medicine link</b> (1mg, PharmEasy, Netmeds…) to auto-read it — or paste a <b>list</b>, one per line as <b>Brand — Composition</b>. Type (TAB/CAP/INJ…) is auto-detected.</p>
+        <pre class="imp-example">https://www.1mg.com/drugs/gemidro-150mg-tablet
+— or —
+Gemidro 150 mg - Risedronate Sodium 150 mg
+GutGermina cap - Saccharomyces boulardii 250 mg</pre>
+        <textarea id="am-paste-text" class="imp-textarea" placeholder="Paste a link or your list here…"></textarea>
+        <div id="am-paste-status" class="imp-status"></div>
+        <div id="am-paste-preview" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
           <div style="display:flex;gap:8px;">
             <div style="flex:1">
               <label class="modal-label">Brand Name *</label>
-              <input id="imp-pv-brand" class="modal-input" autocomplete="off">
+              <input id="am-pv-brand" class="modal-input" autocomplete="off">
             </div>
             <div style="width:90px">
               <label class="modal-label">Type</label>
-              <select id="imp-pv-type" class="modal-input">
+              <select id="am-pv-type" class="modal-input">
                 <option>TAB</option><option>CAP</option><option>SYP</option>
                 <option>INJ</option><option>GEL</option><option>SPRAY</option>
                 <option>DROPS</option><option>PWD</option><option>CREAM</option><option>OINT</option>
@@ -836,9 +812,13 @@ GutGermina cap - Saccharomyces boulardii 250 mg</pre>
           </div>
           <div style="margin-top:8px;">
             <label class="modal-label">Composition / Content</label>
-            <input id="imp-pv-content" class="modal-input">
+            <input id="am-pv-content" class="modal-input">
           </div>
-          <button class="btn-primary" style="width:100%;margin-top:12px;" onclick="addImportedFromLink()">Add to list</button>
+          <button class="btn-primary" style="width:100%;margin-top:12px;" onclick="addImportedFromLink()">Add this medicine</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="btn-primary" style="flex:1" onclick="smartAddFromPaste()">Add to list</button>
+          <button class="btn-secondary" onclick="closeAddMedModal()">Cancel</button>
         </div>
       </div>
     </div>

@@ -49,8 +49,9 @@ body { font-family: var(--font); font-size: 13.5px; color: var(--text); backgrou
 .tb-btn {
   background: rgba(255,255,255,.18); border: none; color: #fff;
   padding: 5px 12px; border-radius: 20px; cursor: pointer;
-  font-size: 12px; font-weight: 600; transition: background .15s;
+  font-size: 12px; font-weight: 600; transition: all .18s cubic-bezier(.4,0,.2,1);
 }
+.tb-btn:active { transform: scale(.95); }
 .tb-btn:hover { background: rgba(255,255,255,.28); }
 .tb-btn-green { background: var(--green); }
 .tb-btn-green:hover { background: #0d8a4f; }
@@ -302,8 +303,11 @@ body { font-family: var(--font); font-size: 13.5px; color: var(--text); backgrou
 
 .action-btn {
   padding: 7px 14px; border-radius: var(--radius); font-size: 12.5px;
-  font-weight: 600; cursor: pointer; border: none; transition: all .15s;
+  font-weight: 600; cursor: pointer; border: none;
+  transition: all .2s cubic-bezier(.4,0,.2,1);
 }
+.action-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.action-btn:active { transform: translateY(0) scale(.97); box-shadow: var(--shadow); }
 .btn-save { background: var(--blue-light); color: var(--blue); }
 .btn-save:hover { background: var(--blue); color: #fff; }
 .btn-print { background: var(--green); color: #fff; }
@@ -476,20 +480,16 @@ textarea.form-field { min-height: 64px; }
 .med-alpha-brand { font-size: 12px; font-weight: 700; color: var(--text1); }
 .med-alpha-content { font-size: 10.5px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .med-alpha-tick { font-size: 11px; color: #16a34a; font-weight: 700; }
-.med-unstar-btn {
-  flex-shrink: 0; background: none; border: none; cursor: pointer;
-  color: #d97706; font-size: 13px; padding: 2px 5px; border-radius: 3px;
-  transition: color .1s, background .1s; line-height: 1;
-}
-.med-unstar-btn:hover { color: #dc2626; background: #fee2e2; }
 .med-del-btn {
-  flex-shrink: 0; cursor: pointer; line-height: 1;
-  background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626;
-  font-size: 14px; font-weight: 700; width: 26px; height: 26px; border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
+  display: none; flex-shrink: 0; cursor: pointer; line-height: 1;
+  background: none; border: none; color: #dc2626;
+  font-size: 13px; font-weight: 700; padding: 2px 5px; border-radius: 3px;
   transition: color .1s, background .1s;
 }
-.med-del-btn:hover { color: #fff; background: #dc2626; border-color: #dc2626; }
+.med-del-btn:hover { background: #fee2e2; }
+/* Long-press (hard-press) a row to reveal its delete button */
+.med-alpha-row.del-armed { background: #fff5f5; }
+.med-alpha-row.del-armed .med-del-btn { display: inline-block; }
 /* ── Import Medicines modal ──────────────────────────────────────────────── */
 .imp-tabs { display: flex; border-bottom: 1px solid var(--border); }
 .imp-tab {
@@ -511,18 +511,6 @@ textarea.form-field { min-height: 64px; }
 }
 .imp-textarea:focus { outline: none; border-color: var(--blue); }
 .imp-status { font-size: 12px; color: var(--text2); margin-top: 10px; min-height: 16px; }
-.med-alpha-repo { background: #fffbeb; }
-.med-alpha-repo .med-alpha-brand { color: #92400e; }
-.med-alpha-divider { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; padding: 4px 12px 2px; background: var(--surface2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-
-/* Rx repo save button */
-.rx-repo-btn {
-  font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
-  border: 1px solid var(--border2); background: none; cursor: pointer;
-  color: var(--text3); margin-top: 3px; transition: all .12s; display: inline-block;
-}
-.rx-repo-btn:hover { border-color: #d97706; color: #d97706; background: #fffbeb; }
-.rx-repo-saved { color: #92400e; border-color: #d97706; background: #fffbeb; }
 .rx-remove-btn {
   font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
   border: 1px solid var(--border2); background: none; cursor: pointer;
@@ -709,15 +697,17 @@ input.modal-input:focus, select.modal-input:focus {
 .btn-primary {
   padding: 8px 20px; background: var(--blue); color: #fff;
   border: none; border-radius: var(--radius); font-size: 13px; font-weight: 600;
-  cursor: pointer; transition: background .15s;
+  cursor: pointer; transition: all .2s cubic-bezier(.4,0,.2,1);
 }
-.btn-primary:hover { background: var(--blue-dark); }
+.btn-primary:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(42,171,154,.3); }
+.btn-primary:active { transform: translateY(0) scale(.98); box-shadow: 0 1px 4px rgba(42,171,154,.35); }
 .btn-secondary {
   padding: 8px 16px; background: var(--surface2); color: var(--text2);
   border: 1.5px solid var(--border2); border-radius: var(--radius);
-  font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s cubic-bezier(.4,0,.2,1);
 }
-.btn-secondary:hover { border-color: var(--border); background: var(--border); }
+.btn-secondary:hover { border-color: var(--border2); background: var(--border); }
+.btn-secondary:active { transform: scale(.98); }
 
 /* ─── New Patient Modal ───────────────────────────────────────────────────── */
 .modal-patient { width: 540px; }
@@ -740,11 +730,16 @@ input.modal-input:focus, select.modal-input:focus {
 .np-gender-group { display: flex; border: 1.5px solid var(--border2); border-radius: var(--radius); overflow: hidden; height: 38px; width: 160px; }
 .np-gender-btn {
   flex: 1; background: var(--surface); border: none; border-right: 1px solid var(--border2);
-  font-size: 12px; font-weight: 600; color: var(--text2); cursor: pointer; transition: all .12s;
+  font-size: 12px; font-weight: 600; letter-spacing: .01em; color: var(--text2); cursor: pointer;
+  transition: background .2s cubic-bezier(.4,0,.2,1), color .2s cubic-bezier(.4,0,.2,1);
 }
 .np-gender-btn:last-child { border-right: none; }
-.np-gender-btn.active { background: var(--blue); color: #fff; }
-.np-gender-btn:hover:not(.active) { background: var(--blue-light); color: var(--blue); }
+.np-gender-btn.active {
+  background: var(--blue); color: #fff;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.12);
+}
+.np-gender-btn:hover:not(.active) { background: var(--blue-light); color: var(--blue-dark); }
+.np-gender-btn:active { transform: scale(.96); }
 
 /* ─── Invoice Modal ──────────────────────────────────────────────────────── */
 .btn-invoice { background: #f0fdf4; color: #16a34a; border: 1.5px solid #bbf7d0; }
@@ -944,19 +939,27 @@ input.modal-input:focus, select.modal-input:focus {
 .bep-close { background: none; border: none; font-size: 16px; cursor: pointer; color: var(--text3); padding: 0; }
 .bep-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .bep-btn {
-  padding: 5px 10px; border: 1px solid var(--blue); border-radius: 6px;
-  background: #fff; color: var(--blue); font-size: 12px; cursor: pointer; font-weight: 500;
+  padding: 7px 14px; border: 1.5px solid var(--blue); border-radius: 8px;
+  background: #fff; color: var(--blue-dark); font-size: 12px; cursor: pointer; font-weight: 600;
+  letter-spacing: .01em; transition: all .2s cubic-bezier(.4,0,.2,1);
 }
-.bep-btn:hover { background: var(--blue); color: #fff; }
-.bep-btn-primary { background: var(--blue); color: #fff; }
-.bep-btn-primary:hover { background: #1558d6; }
+.bep-btn:hover {
+  background: var(--blue); color: #fff;
+  transform: translateY(-1px); box-shadow: 0 4px 12px rgba(42,171,154,.28);
+}
+.bep-btn:active { transform: translateY(0) scale(.97); box-shadow: 0 1px 3px rgba(42,171,154,.35); }
 .bep-tests-label { font-size: 11px; color: var(--text3); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; }
-.bep-tests-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.bep-tests-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .bep-test-btn {
-  padding: 3px 9px; border: 1px solid #93c5fd; border-radius: 12px;
-  background: #fff; font-size: 11px; cursor: pointer; color: #1e40af;
+  padding: 5px 12px; border: 1.5px solid var(--border2); border-radius: 20px;
+  background: #fff; font-size: 11.5px; font-weight: 500; cursor: pointer; color: var(--text2);
+  transition: all .18s cubic-bezier(.4,0,.2,1);
 }
-.bep-test-btn:hover { background: #dbeafe; }
+.bep-test-btn:hover {
+  border-color: var(--blue); color: var(--blue-dark); background: var(--blue-light);
+  transform: translateY(-1px); box-shadow: 0 2px 8px rgba(42,171,154,.2);
+}
+.bep-test-btn:active { transform: scale(.94); }
 .bep-diag-hint { margin-top: 10px; font-size: 11px; color: #0369a1; font-style: italic; }
 .bep-diag-section { margin-top: 10px; }
 .bep-diag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
