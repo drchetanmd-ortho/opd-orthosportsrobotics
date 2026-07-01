@@ -758,7 +758,6 @@ function renderMedicineTable() {
         <td class="rx-med-cell">
           <input class="rx-med-name" value="${esc(m.brand)}" onchange="updateMedName(${idx},'brand',this.value)" title="Edit medicine name">
           <input class="rx-med-comp" value="${esc(m.content||'')}" onchange="updateMedName(${idx},'content',this.value)" placeholder="Composition" title="Edit composition">
-          <button class="rx-remove-btn" onclick="removeMed(${idx})" title="Remove this medicine">✕ Remove</button>
         </td>
         <td>${rxSel(DOSAGE_OPTS, item.timings, idx, 'timings')}</td>
         <td>${rxSel(ADMIN_OPTS,  item.timingsNote||'After Food', idx, 'timingsNote')}</td>
