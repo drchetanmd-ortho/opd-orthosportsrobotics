@@ -483,12 +483,13 @@ textarea.form-field { min-height: 64px; }
 }
 .med-unstar-btn:hover { color: #dc2626; background: #fee2e2; }
 .med-del-btn {
-  flex-shrink: 0; background: none; border: none; cursor: pointer;
-  color: var(--text3); font-size: 13px; padding: 2px 6px; border-radius: 3px;
-  transition: color .1s, background .1s; line-height: 1; opacity: .55;
+  flex-shrink: 0; cursor: pointer; line-height: 1;
+  background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626;
+  font-size: 14px; font-weight: 700; width: 26px; height: 26px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: color .1s, background .1s;
 }
-.med-alpha-row:hover .med-del-btn { opacity: 1; }
-.med-del-btn:hover { color: #dc2626; background: #fee2e2; }
+.med-del-btn:hover { color: #fff; background: #dc2626; border-color: #dc2626; }
 /* ── Import Medicines modal ──────────────────────────────────────────────── */
 .imp-tabs { display: flex; border-bottom: 1px solid var(--border); }
 .imp-tab {
@@ -819,6 +820,7 @@ input.modal-input:focus, select.modal-input:focus {
   #today-date { font-size: 9px; }
   .tb-logo-img { height: 40px; }
   .tb-btn-backup { display: none; } /* moved to mobile nav */
+  .tb-btn-review { display: none; } /* moved to mobile nav */
 
   /* 3-panel → single full panel */
   #main {
