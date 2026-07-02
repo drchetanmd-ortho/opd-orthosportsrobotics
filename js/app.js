@@ -495,9 +495,12 @@ async function startNewVisit(patient) {
     State.medicines = (todayVisit.medicines || []).map(m => ({
       med: { id:m.id, brand:m.brand, content:m.content, type:m.type, form:m.form },
       route: m.route || routeFromType(m.type),
+      schedule: m.schedule || schedFromTimings(m.timings),
+      dosage: m.dosage || m.dose || '1',
+      instructions: m.instructions || normInstr(m.timingsNote),
       dose: m.dose, timings: m.timings || '1-0-0',
       timingsNote: m.timingsNote || 'After Food',
-      frequency: m.frequency || 'Once Daily',
+      frequency: m.frequency || 'Once a day',
       duration: m.duration || 'As Directed',
       qty: m.qty || '',
       details: m.details || '', notes: m.notes || ''
@@ -746,6 +749,9 @@ function scheduleAutoSave() {
       id: m.med.id, brand: m.med.brand, content: m.med.content,
       type: m.med.type, form: m.med.form,
       route: m.route || routeFromType(m.med.type),
+      schedule: m.schedule || schedFromTimings(m.timings),
+      dosage: m.dosage || m.dose || '1',
+      instructions: m.instructions || normInstr(m.timingsNote),
       dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
       frequency: m.frequency, duration: m.duration, qty: m.qty,
       details: m.details || '', notes: m.notes || ''
@@ -755,12 +761,33 @@ function scheduleAutoSave() {
 }
 
 // ─── Medicine Table ───────────────────────────────────────────────────────────
-const DOSAGE_OPTS = ['1-0-0','0-1-0','0-0-1','1-1-0','1-0-1','0-1-1','1-1-1','1-1-1-1','SOS','As Directed'];
-const TIMING_OPTS = ['Before Food','After Food','Along with Food','Empty Stomach','Early Morning','Morning','Afternoon','Evening','Night','At Bedtime','With Milk','As Directed'];
-const ROUTE_OPTS  = ['Oral','Subcutaneous','Intramuscular','Intravenous','Topical','Intra-articular','Sublingual','Inhalation','Rectal','Nasal','Ophthalmic','As Directed'];
-const FREQ_OPTS   = ['Once Daily','Twice Daily','Thrice Daily','Four Times Daily','Weekly','Alternate Days','SOS','As Directed'];
-const DUR_OPTS    = ['1 Day','2 Days','3 Days','5 Days','7 Days','10 Days','14 Days','1 Month','2 Months','3 Months','6 Months','As Directed'];
-const TYPE_OPTS   = ['TAB','CAP','SYP','INJ','GEL','SPRAY','DROPS','PWD','CREAM','OINT'];
+const ROUTE_OPTS = [
+  'Oral','Sublingual','Eye','Ear','Nasal','Inhalation','Puff','Skin','Topical','Transdermal',
+  'Local','Intramuscular','IV Injection','IV Infusion','Subcutaneous','Intradermal',
+  'Intra-articular','Intrathecal','Epidural','Rectal','Vaginal','RT','As Directed'
+];
+const FREQ_OPTS = [
+  'Once a day','Twice Daily','Thrice Daily','Four times a day','Five times a day','Six times a day',
+  'Every hour','Every 2 hours','Every 4 hours','Every 6 hours',
+  'Once a week','Twice a week','Thrice a week','Alternate days',
+  'Once a month','Twice a month','Once in six months',
+  'Bed Time','Once','Continuous','SOS / As required','As Directed'
+];
+const SCHEDULE_OPTS = [
+  'Morning','Afternoon','Evening','Night',
+  'Morning-Afternoon','Morning-Evening','Morning-Night','Afternoon-Evening','Afternoon-Night','Evening-Night',
+  'Morning-Afternoon-Evening','Morning-Afternoon-Night','Morning-Evening-Night',
+  'Morning-Afternoon-Evening-Night','As Directed'
+];
+const INSTR_OPTS = [
+  'As directed','Empty stomach','Before meals','With meals','After meals',
+  'Before Breakfast','With Breakfast','After Breakfast',
+  'Before Lunch','With Lunch','After Lunch',
+  'Before Dinner','With Dinner','After Dinner',
+  'At Bedtime','At Night','With Milk'
+];
+const DUR_UNITS = ['Days','Weeks','Months','Years'];
+const TYPE_OPTS = ['TAB','CAP','SYP','INJ','GEL','SPRAY','DROPS','PWD','CREAM','OINT'];
 
 // Default route of administration inferred from the medicine's form/type
 function routeFromType(type) {
@@ -770,9 +797,50 @@ function routeFromType(type) {
     case 'CREAM':
     case 'OINT':  return 'Topical';
     case 'SPRAY': return 'Inhalation';
-    case 'DROPS': return 'Ophthalmic';
+    case 'DROPS': return 'Eye';
     default:      return 'Oral';   // TAB, CAP, SYP, PWD…
   }
+}
+
+// Convert legacy "1-0-1"-style timings to a schedule label
+function schedFromTimings(t) {
+  const map = {
+    '1-0-0':'Morning','0-1-0':'Afternoon','0-0-1':'Night',
+    '1-1-0':'Morning-Afternoon','1-0-1':'Morning-Night','0-1-1':'Afternoon-Night',
+    '1-1-1':'Morning-Afternoon-Night','1-1-1-1':'Morning-Afternoon-Evening-Night'
+  };
+  if (map[t]) return map[t];
+  if (SCHEDULE_OPTS.includes(t)) return t;
+  return 'Morning';
+}
+
+// Normalise legacy instruction wording to the new list
+function normInstr(s) {
+  const map = {
+    'After Food':'After meals','Before Food':'Before meals','With Food':'With meals',
+    'Along with Food':'With meals','Empty Stomach':'Empty stomach','As Directed':'As directed'
+  };
+  const v = map[s] || s;
+  return INSTR_OPTS.includes(v) ? v : 'As directed';
+}
+
+// Duration cell: number + unit (e.g. "90 Days"); blank number = As Directed
+function parseDuration(d) {
+  const m = /^(\d+)\s*(Day|Week|Month|Year)s?$/i.exec((d || '').trim());
+  if (m) {
+    const unit = m[2].charAt(0).toUpperCase() + m[2].slice(1).toLowerCase() + 's';
+    return { num: m[1], unit };
+  }
+  return { num: '', unit: 'Days' };
+}
+
+function updateDuration(idx) {
+  const item = State.medicines[idx];
+  if (!item) return;
+  const num = document.getElementById(`rx-dur-num-${idx}`)?.value.trim();
+  const unit = document.getElementById(`rx-dur-unit-${idx}`)?.value || 'Days';
+  item.duration = num ? `${num} ${unit}` : 'As Directed';
+  scheduleAutoSave();
 }
 
 function rxSel(opts, val, idx, field) {
@@ -796,11 +864,18 @@ function renderMedicineTable() {
           <input class="rx-med-name" value="${esc(m.brand)}" onchange="updateMedName(${idx},'brand',this.value)" title="Edit medicine name">
           <input class="rx-med-comp" value="${esc(m.content||'')}" onchange="updateMedName(${idx},'content',this.value)" placeholder="Composition" title="Edit composition">
         </td>
-        <td>${rxSel(ROUTE_OPTS,  item.route || routeFromType(m.type), idx, 'route')}</td>
-        <td>${rxSel(DOSAGE_OPTS, item.timings, idx, 'timings')}</td>
-        <td>${rxSel(TIMING_OPTS, item.timingsNote||'After Food', idx, 'timingsNote')}</td>
-        <td>${rxSel(FREQ_OPTS,   item.frequency||'Once Daily',   idx, 'frequency')}</td>
-        <td>${rxSel(DUR_OPTS,    item.duration,  idx, 'duration')}</td>
+        <td>${rxSel(ROUTE_OPTS, item.route || routeFromType(m.type), idx, 'route')}</td>
+        <td>${rxSel(FREQ_OPTS, item.frequency || 'Once a day', idx, 'frequency')}</td>
+        <td>${rxSel(SCHEDULE_OPTS, item.schedule || schedFromTimings(item.timings), idx, 'schedule')}</td>
+        <td><input class="rx-input rx-dosage" value="${esc(item.dosage || item.dose || '1')}" onchange="updateMed(${idx},'dosage',this.value)" placeholder="1" title="Dosage per administration"></td>
+        <td>${rxSel(INSTR_OPTS, item.instructions || normInstr(item.timingsNote), idx, 'instructions')}</td>
+        <td class="rx-dur-cell">
+          <input id="rx-dur-num-${idx}" class="rx-input rx-dur-num" type="number" min="1"
+            value="${esc(parseDuration(item.duration).num)}" placeholder="—" onchange="updateDuration(${idx})">
+          <select id="rx-dur-unit-${idx}" class="rx-sel rx-dur-unit" onchange="updateDuration(${idx})">
+            ${DUR_UNITS.map(u => `<option${parseDuration(item.duration).unit === u ? ' selected' : ''}>${u}</option>`).join('')}
+          </select>
+        </td>
         <td><input class="rx-input rx-notes" value="${esc(item.notes||'')}" onchange="updateMed(${idx},'notes',this.value)" placeholder="Notes…"></td>
         <td><button class="btn-icon btn-del" onclick="removeMed(${idx})" title="Remove">✕</button></td>
       </tr>
@@ -811,7 +886,7 @@ function renderMedicineTable() {
   const addRow = `
     <tr class="rx-add-row" id="rx-add-row">
       <td class="rx-num" style="color:var(--text3)">${State.medicines.length + 1}</td>
-      <td colspan="8" style="position:relative;">
+      <td colspan="9" style="position:relative;">
         <input id="rx-inline-search" class="rx-inline-search" type="text"
           placeholder="Search and add medicine…"
           autocomplete="off" spellcheck="false"
@@ -860,13 +935,15 @@ function addMedicine(med) {
   State.medicines.push({
     med,
     route: med.route || routeFromType(med.type),
+    frequency: FREQ_OPTS.includes(med.frequency) ? med.frequency : 'Once a day',
+    schedule: schedFromTimings(med.timings),
+    dosage: med.dose || '1',
+    instructions: med.type === 'INJ' ? 'As directed' : normInstr(med.timingsNote),
+    duration: med.duration,
+    // legacy fields kept for templates/old visits
     dose: med.dose,
     timings: med.timings,
-    // keep only real food/time-of-day timings here; route text stays in the route column
-    timingsNote: TIMING_OPTS.includes(med.timingsNote) ? med.timingsNote
-                 : (med.type === 'INJ' ? 'As Directed' : 'After Food'),
-    frequency: 'Once Daily',
-    duration: med.duration,
+    timingsNote: med.timingsNote,
     qty: med.qty || ''
   });
   renderMedicineTable();
@@ -1387,6 +1464,11 @@ function applyTemplateById(id) {
     if (med) {
       State.medicines.push({
         med,
+        route: routeFromType(med.type),
+        frequency: FREQ_OPTS.includes(item.frequency) ? item.frequency : 'Once a day',
+        schedule: schedFromTimings(item.timings || med.timings),
+        dosage: item.dose || med.dose || '1',
+        instructions: med.type === 'INJ' ? 'As directed' : normInstr(item.timingsNote || med.timingsNote),
         dose: item.dose || med.dose,
         timings: item.timings || med.timings,
         timingsNote: item.timingsNote || med.timingsNote,
@@ -1930,6 +2012,9 @@ async function saveVisit() {
     id: m.med.id, brand: m.med.brand, content: m.med.content,
     type: m.med.type, form: m.med.form,
     route: m.route || routeFromType(m.med.type),
+    schedule: m.schedule || schedFromTimings(m.timings),
+    dosage: m.dosage || m.dose || '1',
+    instructions: m.instructions || normInstr(m.timingsNote),
     dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
     frequency: m.frequency, duration: m.duration, qty: m.qty,
     details: m.details || '', notes: m.notes || ''
@@ -2066,9 +2151,10 @@ async function printPrescription() {
           <span class="pm-comp">Content : ${esc(m.content)}</span>
         </td>
         <td class="pm-route">${esc(item.route || routeFromType(m.type))}</td>
-        <td class="pm-dose">${esc(item.timings)}</td>
-        <td class="pm-timings">${esc(item.timingsNote || '')}</td>
         <td class="pm-timings">${esc(item.frequency || '')}</td>
+        <td class="pm-timings">${esc(item.schedule || schedFromTimings(item.timings))}</td>
+        <td class="pm-dose">${esc(item.dosage || item.dose || '1')}</td>
+        <td class="pm-timings">${esc(item.instructions || normInstr(item.timingsNote))}</td>
         <td class="pm-dur">${esc(item.duration)}</td>
       </tr>
     `;
@@ -2191,9 +2277,10 @@ async function printPrescription() {
         <th></th>
         <th>Medication</th>
         <th>Route</th>
-        <th>Dose</th>
-        <th>Timings</th>
         <th>Frequency</th>
+        <th>Schedule</th>
+        <th>Dosage</th>
+        <th>Instructions</th>
         <th>Duration</th>
       </tr>
     </thead>
@@ -2313,10 +2400,13 @@ async function loadVisit(id) {
     };
     return {
       med, route: m.route || routeFromType(m.type || med.type),
+      schedule: m.schedule || schedFromTimings(m.timings || med.timings),
+      dosage: m.dosage || m.dose || '1',
+      instructions: m.instructions || normInstr(m.timingsNote || med.timingsNote),
       dose: m.dose,
       timings: m.timings || m.freq || med.timings,
       timingsNote: m.timingsNote || med.timingsNote || 'After Food',
-      frequency: m.frequency || 'Once Daily',
+      frequency: m.frequency || 'Once a day',
       duration: m.duration, qty: m.qty || '',
       details: m.details || '', notes: m.notes || ''
     };
@@ -2847,9 +2937,10 @@ async function buildPrescriptionHtml() {
       <td class="pm-med"><strong>${esc(m.type)}. ${esc(m.brand)}</strong><br>
         <span class="pm-comp">${esc(m.content)}</span></td>
       <td class="pm-route">${esc(item.route || routeFromType(m.type))}</td>
-      <td class="pm-dose">${esc(item.timings || '')}</td>
-      <td class="pm-timings">${esc(item.timingsNote || '')}</td>
       <td class="pm-timings">${esc(item.frequency || '')}</td>
+      <td class="pm-timings">${esc(item.schedule || schedFromTimings(item.timings))}</td>
+      <td class="pm-dose">${esc(item.dosage || item.dose || '1')}</td>
+      <td class="pm-timings">${esc(item.instructions || normInstr(item.timingsNote))}</td>
       <td class="pm-dur">${esc(item.duration || '')}</td>
     </tr>`;
   }).join('');
@@ -2878,6 +2969,12 @@ body { font-family: Arial, sans-serif; font-size:11px; color:#000; background:#f
 table.rx { width:100%; border-collapse:collapse; margin-top:4px; }
 table.rx th { text-align:left; padding:4px 6px; font-size:10px; font-weight:700; background:#f0f0f0; border-bottom:1.5px solid #000; }
 table.rx td { padding:3px 6px; vertical-align:top; font-size:10px; }
+.pm-num { width:24px; font-weight:700; }
+.pm-med { width:auto; }
+.pm-route { width:70px; text-align:center; }
+.pm-timings { width:75px; text-align:center; }
+.pm-dose { width:42px; text-align:center; }
+.pm-dur { width:60px; text-align:center; }
 .pm-comp { font-size:9px; color:#444; }
 .advice-section { margin-top:10px; }
 .advice-item { padding:1px 0 1px 12px; position:relative; font-size:10.5px; }
@@ -2905,7 +3002,7 @@ ${v.examination ? `<div class="section-block"><span class="section-label">Examin
 ${v.investigations ? `<div class="section-block"><span class="section-label">Investigations: </span>${escNl(v.investigations)}</div>` : ''}
 ${v.diagnosis ? `<div class="section-block"><span class="section-label">Diagnosis: </span><strong>${esc(v.diagnosis)}</strong>${v.icd10 ? ` <span style="color:#666;font-size:10px;">(${esc(v.icd10)})</span>` : ''}</div>` : ''}
 ${State.medicines.length ? `<div class="rx-symbol">&#x211E;</div>
-<table class="rx"><thead><tr><th></th><th>Medication</th><th>Route</th><th>Dose</th><th>Timings</th><th>Frequency</th><th>Duration</th></tr></thead>
+<table class="rx"><thead><tr><th></th><th>Medication</th><th>Route</th><th>Frequency</th><th>Schedule</th><th>Dosage</th><th>Instructions</th><th>Duration</th></tr></thead>
 <tbody>${medRows}</tbody></table>` : ''}
 ${adviceLines.length ? `<div class="advice-section"><div class="section-label">Advice:</div>${adviceLines.map(a => `<div class="advice-item">${esc(a)}</div>`).join('')}</div>` : ''}
 ${v.procedure ? `<div class="section-block" style="margin-top:8px;"><span class="section-label">Procedure Done: </span>${escNl(v.procedure)}</div>` : ''}

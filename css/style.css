@@ -403,6 +403,10 @@ textarea.form-field { min-height: 64px; }
 .rx-freq { width: 70px; }
 .rx-dur { width: 100px; }
 .rx-qty { width: 45px; }
+.rx-dosage { width: 45px; text-align: center; }
+.rx-dur-cell { white-space: nowrap; }
+.rx-dur-num { width: 48px; display: inline-block; text-align: center; }
+.rx-dur-unit { width: 68px; display: inline-block; }
 .rx-sel {
   width: 100%; border: 1px solid var(--border); border-radius: 4px;
   padding: 4px 4px; font-size: 11.5px; font-family: var(--font);
@@ -861,7 +865,7 @@ input.modal-input:focus, select.modal-input:focus {
 
   /* Rx table: horizontal scroll */
   .rx-section { overflow-x: auto; }
-  .rx-table { min-width: 700px; }
+  .rx-table { min-width: 950px; }
 
   /* Right panel full height */
   #right-panel { flex-direction: column; }
