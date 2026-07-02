@@ -2,6 +2,10 @@
 function esc(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+// Escape for HTML, preserving line breaks — for multi-line clinical notes in PDFs
+function escNl(str) {
+  return esc(str).replace(/\n/g, '<br>');
+}
 
 // ─── Medicine Master List (editable, persisted) ───────────────────────────────
 // The list is stored in localStorage and seeded once from MEDICINE_SEED (sample
@@ -9,17 +13,34 @@ function esc(str) {
 const MEDS_KEY = 'med_master_list';
 
 let MEDICINE_DB = (function loadMedList() {
+  const makeSeed = () => (typeof MEDICINE_SEED !== 'undefined') ? MEDICINE_SEED.map(m => ({ ...m })) : [];
+  const raw = localStorage.getItem(MEDS_KEY);
+  if (raw == null) {
+    // First run — seed once from the sample list
+    const seed = makeSeed();
+    try { localStorage.setItem(MEDS_KEY, JSON.stringify(seed)); } catch (e) {}
+    return seed;
+  }
   try {
-    const saved = localStorage.getItem(MEDS_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch (e) {}
-  const seed = (typeof MEDICINE_SEED !== 'undefined') ? MEDICINE_SEED.map(m => ({ ...m })) : [];
-  try { localStorage.setItem(MEDS_KEY, JSON.stringify(seed)); } catch (e) {}
-  return seed;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;   // normal path
+  } catch (e) { /* fall through */ }
+  // Corrupt or unexpected data: DO NOT overwrite it (would lose the clinic's list).
+  // Preserve the original for recovery and work from a fresh sample list in memory.
+  try { localStorage.setItem(MEDS_KEY + '_corrupt_backup', raw); } catch (e) {}
+  console.error('Medicine list unreadable; using sample list. Original preserved at ' + MEDS_KEY + '_corrupt_backup');
+  return makeSeed();
 })();
 
 function saveMedList() {
-  try { localStorage.setItem(MEDS_KEY, JSON.stringify(MEDICINE_DB)); } catch (e) {}
+  try {
+    localStorage.setItem(MEDS_KEY, JSON.stringify(MEDICINE_DB));
+    return true;
+  } catch (e) {
+    console.error('Failed to save medicine list', e);
+    if (typeof toast === 'function') toast('Could not save medicine list — device storage may be full', 'error', 4000);
+    return false;
+  }
 }
 
 // One-time migration: fold any medicines from the old "favourites"/custom stores
@@ -473,6 +494,7 @@ async function startNewVisit(patient) {
     State.currentVisit = todayVisit;
     State.medicines = (todayVisit.medicines || []).map(m => ({
       med: { id:m.id, brand:m.brand, content:m.content, type:m.type, form:m.form },
+      route: m.route || routeFromType(m.type),
       dose: m.dose, timings: m.timings || '1-0-0',
       timingsNote: m.timingsNote || 'After Food',
       frequency: m.frequency || 'Once Daily',
@@ -723,6 +745,7 @@ function scheduleAutoSave() {
     State.currentVisit.medicines = State.medicines.map(m => ({
       id: m.med.id, brand: m.med.brand, content: m.med.content,
       type: m.med.type, form: m.med.form,
+      route: m.route || routeFromType(m.med.type),
       dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
       frequency: m.frequency, duration: m.duration, qty: m.qty,
       details: m.details || '', notes: m.notes || ''
@@ -733,10 +756,24 @@ function scheduleAutoSave() {
 
 // ─── Medicine Table ───────────────────────────────────────────────────────────
 const DOSAGE_OPTS = ['1-0-0','0-1-0','0-0-1','1-1-0','1-0-1','0-1-1','1-1-1','1-1-1-1','SOS','As Directed'];
-const ADMIN_OPTS  = ['After Food','Before Food','Empty Stomach','With Food','At Bedtime','With Milk','As Directed'];
+const TIMING_OPTS = ['Before Food','After Food','Along with Food','Empty Stomach','Early Morning','Morning','Afternoon','Evening','Night','At Bedtime','With Milk','As Directed'];
+const ROUTE_OPTS  = ['Oral','Subcutaneous','Intramuscular','Intravenous','Topical','Intra-articular','Sublingual','Inhalation','Rectal','Nasal','Ophthalmic','As Directed'];
 const FREQ_OPTS   = ['Once Daily','Twice Daily','Thrice Daily','Four Times Daily','Weekly','Alternate Days','SOS','As Directed'];
 const DUR_OPTS    = ['1 Day','2 Days','3 Days','5 Days','7 Days','10 Days','14 Days','1 Month','2 Months','3 Months','6 Months','As Directed'];
 const TYPE_OPTS   = ['TAB','CAP','SYP','INJ','GEL','SPRAY','DROPS','PWD','CREAM','OINT'];
+
+// Default route of administration inferred from the medicine's form/type
+function routeFromType(type) {
+  switch ((type || '').toUpperCase()) {
+    case 'INJ':   return 'Subcutaneous';
+    case 'GEL':
+    case 'CREAM':
+    case 'OINT':  return 'Topical';
+    case 'SPRAY': return 'Inhalation';
+    case 'DROPS': return 'Ophthalmic';
+    default:      return 'Oral';   // TAB, CAP, SYP, PWD…
+  }
+}
 
 function rxSel(opts, val, idx, field) {
   const hasVal = opts.includes(val);
@@ -759,12 +796,11 @@ function renderMedicineTable() {
           <input class="rx-med-name" value="${esc(m.brand)}" onchange="updateMedName(${idx},'brand',this.value)" title="Edit medicine name">
           <input class="rx-med-comp" value="${esc(m.content||'')}" onchange="updateMedName(${idx},'content',this.value)" placeholder="Composition" title="Edit composition">
         </td>
+        <td>${rxSel(ROUTE_OPTS,  item.route || routeFromType(m.type), idx, 'route')}</td>
         <td>${rxSel(DOSAGE_OPTS, item.timings, idx, 'timings')}</td>
-        <td>${rxSel(ADMIN_OPTS,  item.timingsNote||'After Food', idx, 'timingsNote')}</td>
+        <td>${rxSel(TIMING_OPTS, item.timingsNote||'After Food', idx, 'timingsNote')}</td>
         <td>${rxSel(FREQ_OPTS,   item.frequency||'Once Daily',   idx, 'frequency')}</td>
         <td>${rxSel(DUR_OPTS,    item.duration,  idx, 'duration')}</td>
-        <td><input class="rx-input rx-qty" value="${esc(item.qty||'')}" onchange="updateMed(${idx},'qty',this.value)" placeholder="Qty"></td>
-        <td><input class="rx-input rx-details" value="${esc(item.details||'')}" onchange="updateMed(${idx},'details',this.value)" placeholder="Details…"></td>
         <td><input class="rx-input rx-notes" value="${esc(item.notes||'')}" onchange="updateMed(${idx},'notes',this.value)" placeholder="Notes…"></td>
         <td><button class="btn-icon btn-del" onclick="removeMed(${idx})" title="Remove">✕</button></td>
       </tr>
@@ -775,7 +811,7 @@ function renderMedicineTable() {
   const addRow = `
     <tr class="rx-add-row" id="rx-add-row">
       <td class="rx-num" style="color:var(--text3)">${State.medicines.length + 1}</td>
-      <td colspan="9" style="position:relative;">
+      <td colspan="8" style="position:relative;">
         <input id="rx-inline-search" class="rx-inline-search" type="text"
           placeholder="Search and add medicine…"
           autocomplete="off" spellcheck="false"
@@ -823,9 +859,12 @@ function addMedicine(med) {
   }
   State.medicines.push({
     med,
+    route: med.route || routeFromType(med.type),
     dose: med.dose,
     timings: med.timings,
-    timingsNote: med.timingsNote || 'After Food',
+    // keep only real food/time-of-day timings here; route text stays in the route column
+    timingsNote: TIMING_OPTS.includes(med.timingsNote) ? med.timingsNote
+                 : (med.type === 'INJ' ? 'As Directed' : 'After Food'),
     frequency: 'Once Daily',
     duration: med.duration,
     qty: med.qty || ''
@@ -1686,18 +1725,18 @@ function printInvoice() {
   </div>
   <div class="patient-section">
     <div class="info-block">
-      <p><strong>Patient:</strong> ${p.name}</p>
-      <p><strong>ID:</strong> ${p.id} &nbsp; <strong>Age/Sex:</strong> ${age}y / ${p.gender || ''}</p>
-      <p><strong>Phone:</strong> ${p.phone || '—'}</p>
+      <p><strong>Patient:</strong> ${esc(p.name)}</p>
+      <p><strong>ID:</strong> ${esc(p.id)} &nbsp; <strong>Age/Sex:</strong> ${age}y / ${esc(p.gender || '')}</p>
+      <p><strong>Phone:</strong> ${esc(p.phone || '—')}</p>
     </div>
     <div class="info-block" style="text-align:right">
-      <p><strong>Payment Mode:</strong> ${payMode}</p>
+      <p><strong>Payment Mode:</strong> ${esc(payMode)}</p>
     </div>
   </div>
   <table>
     <thead><tr><th>#</th><th>Description</th><th class="amt">Amount (₹)</th></tr></thead>
     <tbody>
-      ${items.map((it,i)=>`<tr><td>${i+1}</td><td>${it.desc}</td><td class="amt">${it.amt > 0 ? it.amt.toLocaleString('en-IN') : '—'}</td></tr>`).join('')}
+      ${items.map((it,i)=>`<tr><td>${i+1}</td><td>${esc(it.desc)}</td><td class="amt">${it.amt > 0 ? it.amt.toLocaleString('en-IN') : '—'}</td></tr>`).join('')}
       <tr class="total-row"><td colspan="2" style="text-align:right">Total</td><td class="amt">₹ ${total.toLocaleString('en-IN')}</td></tr>
     </tbody>
   </table>
@@ -1841,7 +1880,7 @@ function tmplSearchMeds(query) {
     if (!found.length) { resultsEl.style.display = 'none'; return; }
     resultsEl.style.display = 'block';
     resultsEl.innerHTML = found.map(m => `
-      <div class="tmpl-med-option" onclick="addTmplMed(${JSON.stringify(m.id)})">
+      <div class="tmpl-med-option" onclick="addTmplMed('${String(m.id).replace(/'/g, "\\'")}')">
         <div class="tmpl-med-opt-brand">${esc(m.type)}. ${esc(m.brand)}</div>
         <div class="tmpl-med-opt-content">${esc(m.content)}</div>
       </div>`).join('');
@@ -1890,6 +1929,7 @@ async function saveVisit() {
   State.currentVisit.medicines = State.medicines.map(m => ({
     id: m.med.id, brand: m.med.brand, content: m.med.content,
     type: m.med.type, form: m.med.form,
+    route: m.route || routeFromType(m.med.type),
     dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
     frequency: m.frequency, duration: m.duration, qty: m.qty,
     details: m.details || '', notes: m.notes || ''
@@ -2022,15 +2062,14 @@ async function printPrescription() {
       <tr class="print-med-row">
         <td class="pm-num">${i + 1})</td>
         <td class="pm-med">
-          <strong>${m.type}. ${m.brand}</strong><br>
-          <span class="pm-comp">Content : ${m.content}</span><br>
-          ${item.timingsNote ? `<span class="pm-note">${item.timingsNote}</span>` : ''}
+          <strong>${esc(m.type)}. ${esc(m.brand)}</strong><br>
+          <span class="pm-comp">Content : ${esc(m.content)}</span>
         </td>
-        <td class="pm-dose">${item.timings}</td>
-        <td class="pm-timings">${item.timingsNote || ''}</td>
-        <td class="pm-timings">${item.frequency || ''}</td>
-        <td class="pm-dur">${item.duration}</td>
-        <td class="pm-qty">${item.qty || ''}</td>
+        <td class="pm-route">${esc(item.route || routeFromType(m.type))}</td>
+        <td class="pm-dose">${esc(item.timings)}</td>
+        <td class="pm-timings">${esc(item.timingsNote || '')}</td>
+        <td class="pm-timings">${esc(item.frequency || '')}</td>
+        <td class="pm-dur">${esc(item.duration)}</td>
       </tr>
     `;
   }).join('');
@@ -2074,10 +2113,10 @@ async function printPrescription() {
   table.rx td { padding: 3px 6px; vertical-align: top; font-size: 10px; }
   .pm-num { width: 24px; font-weight: 700; }
   .pm-med { width: auto; }
+  .pm-route { width: 80px; text-align: center; }
   .pm-dose { width: 40px; text-align: center; }
   .pm-timings { width: 70px; text-align: center; }
-  .pm-dur { width: 100px; }
-  .pm-qty { width: 30px; text-align: right; }
+  .pm-dur { width: 90px; }
   .pm-comp { font-size: 9px; color: #444; }
   .pm-note { font-size: 9px; color: #555; font-style: italic; }
   tr.print-med-row { border-bottom: 0.5px solid #e0e0e0; }
@@ -2120,28 +2159,28 @@ async function printPrescription() {
 
   <!-- Patient Bar -->
   <div class="patient-bar">
-    <span>${p.id}: ${p.name} (${age}y, ${p.gender || 'M'}) &nbsp;&nbsp; ${p.phone || ''}</span>
+    <span>${esc(p.id)}: ${esc(p.name)} (${age}y, ${esc(p.gender) || 'M'}) &nbsp;&nbsp; ${esc(p.phone || '')}</span>
     <span>Date &amp; Time : ${formatDateTime(now)}</span>
   </div>
 
   <!-- Chief Complaint -->
-  ${v.complaints ? `<div class="section-block"><span class="section-label">Chief Complaint: </span><span class="section-value">${v.complaints}</span></div>` : ''}
+  ${v.complaints ? `<div class="section-block"><span class="section-label">Chief Complaint: </span><span class="section-value">${escNl(v.complaints)}</span></div>` : ''}
 
   <!-- HoPi -->
-  ${v.hopi ? `<div class="section-block"><span class="section-label">History of Present Illness: </span><span class="section-value">${v.hopi.replace(/\n/g,'<br>')}</span></div>` : ''}
+  ${v.hopi ? `<div class="section-block"><span class="section-label">History of Present Illness: </span><span class="section-value">${escNl(v.hopi)}</span></div>` : ''}
 
   <!-- Past History + Allergies -->
-  ${v.pastHistory ? `<div class="section-block"><span class="section-label">Past Medical History: </span><span class="section-value">${v.pastHistory.replace(/\n/g,'<br>')}</span></div>` : ''}
-  ${v.allergies ? `<div class="section-block"><span class="section-label">Allergies: </span><span class="section-value">${v.allergies}</span></div>` : ''}
+  ${v.pastHistory ? `<div class="section-block"><span class="section-label">Past Medical History: </span><span class="section-value">${escNl(v.pastHistory)}</span></div>` : ''}
+  ${v.allergies ? `<div class="section-block"><span class="section-label">Allergies: </span><span class="section-value">${escNl(v.allergies)}</span></div>` : ''}
 
   <!-- Examination -->
-  ${v.examination ? `<div class="section-block"><span class="section-label">Examination: </span><span class="section-value">${v.examination.replace(/\n/g,'<br>')}</span></div>` : ''}
+  ${v.examination ? `<div class="section-block"><span class="section-label">Examination: </span><span class="section-value">${escNl(v.examination)}</span></div>` : ''}
 
   <!-- Investigations -->
-  ${v.investigations ? `<div class="section-block"><span class="section-label">Investigations: </span><span class="section-value">${v.investigations.replace(/\n/g,'<br>')}</span></div>` : ''}
+  ${v.investigations ? `<div class="section-block"><span class="section-label">Investigations: </span><span class="section-value">${escNl(v.investigations)}</span></div>` : ''}
 
   <!-- Diagnosis -->
-  ${v.diagnosis ? `<div class="section-block"><span class="section-label">Diagnosis: </span><span class="section-value"><strong>${v.diagnosis}</strong>${v.icd10 ? ` <span style="color:#666;font-size:10px;">(${v.icd10})</span>` : ''}</span></div>` : ''}
+  ${v.diagnosis ? `<div class="section-block"><span class="section-label">Diagnosis: </span><span class="section-value"><strong>${esc(v.diagnosis)}</strong>${v.icd10 ? ` <span style="color:#666;font-size:10px;">(${esc(v.icd10)})</span>` : ''}</span></div>` : ''}
 
   <!-- Rx -->
   ${State.medicines.length ? `
@@ -2151,10 +2190,11 @@ async function printPrescription() {
       <tr>
         <th></th>
         <th>Medication</th>
+        <th>Route</th>
         <th>Dose</th>
         <th>Timings</th>
+        <th>Frequency</th>
         <th>Duration</th>
-        <th>Qty</th>
       </tr>
     </thead>
     <tbody>
@@ -2167,18 +2207,18 @@ async function printPrescription() {
   ${adviceLines.length ? `
   <div class="advice-section">
     <div class="section-label">Advice:</div>
-    ${adviceLines.map(a => `<div class="advice-item">${a}</div>`).join('')}
+    ${adviceLines.map(a => `<div class="advice-item">${esc(a)}</div>`).join('')}
   </div>
   ` : ''}
 
   <!-- Procedure Done -->
-  ${v.procedure ? `<div class="section-block" style="margin-top:8px;"><span class="section-label">Procedure Done: </span><span class="section-value">${v.procedure.replace(/\n/g,'<br>')}</span></div>` : ''}
+  ${v.procedure ? `<div class="section-block" style="margin-top:8px;"><span class="section-label">Procedure Done: </span><span class="section-value">${escNl(v.procedure)}</span></div>` : ''}
 
   <!-- Follow Up Plan -->
-  ${v.followUp ? `<div class="followup-box"><strong>Follow Up:</strong> ${v.followUp}</div>` : ''}
+  ${v.followUp ? `<div class="followup-box"><strong>Follow Up:</strong> ${esc(v.followUp)}</div>` : ''}
 
   <!-- Referral -->
-  ${v.referredTo ? `<div class="section-block" style="margin-top:6px;"><span class="section-label">Referred To: </span><span class="section-value">${v.referredTo}</span></div>` : ''}
+  ${v.referredTo ? `<div class="section-block" style="margin-top:6px;"><span class="section-label">Referred To: </span><span class="section-value">${escNl(v.referredTo)}</span></div>` : ''}
 
   <!-- Footer -->
   <div class="footer">
@@ -2272,7 +2312,8 @@ async function loadVisit(id) {
       type: m.type || 'TAB', form: m.form || 'Tablet'
     };
     return {
-      med, dose: m.dose,
+      med, route: m.route || routeFromType(m.type || med.type),
+      dose: m.dose,
       timings: m.timings || m.freq || med.timings,
       timingsNote: m.timingsNote || med.timingsNote || 'After Food',
       frequency: m.frequency || 'Once Daily',
@@ -2803,13 +2844,13 @@ async function buildPrescriptionHtml() {
     const m = item.med;
     return `<tr class="print-med-row">
       <td class="pm-num">${i + 1})</td>
-      <td class="pm-med"><strong>${m.type}. ${m.brand}</strong><br>
-        <span class="pm-comp">${m.content}</span></td>
-      <td class="pm-dose">${item.timings || ''}</td>
-      <td class="pm-timings">${item.timingsNote || ''}</td>
-      <td class="pm-timings">${item.frequency || ''}</td>
-      <td class="pm-dur">${item.duration || ''}</td>
-      <td class="pm-qty">${item.qty || ''}</td>
+      <td class="pm-med"><strong>${esc(m.type)}. ${esc(m.brand)}</strong><br>
+        <span class="pm-comp">${esc(m.content)}</span></td>
+      <td class="pm-route">${esc(item.route || routeFromType(m.type))}</td>
+      <td class="pm-dose">${esc(item.timings || '')}</td>
+      <td class="pm-timings">${esc(item.timingsNote || '')}</td>
+      <td class="pm-timings">${esc(item.frequency || '')}</td>
+      <td class="pm-dur">${esc(item.duration || '')}</td>
     </tr>`;
   }).join('');
 
@@ -2846,16 +2887,16 @@ ${v.followUp ? `.followup-box { margin-top:10px; border:1px dashed #999; padding
   ${logoSrc ? `<img src="${logoSrc}" style="height:60px;object-fit:contain;">` : ''}
 </div>
 <div class="patient-bar">
-  <span>${p.id}: ${p.name} (${age}y, ${p.gender || 'M'}) &nbsp; ${p.phone || ''}</span>
+  <span>${esc(p.id)}: ${esc(p.name)} (${age}y, ${esc(p.gender) || 'M'}) &nbsp; ${esc(p.phone || '')}</span>
   <span>${formatDateTime(now)}</span>
 </div>
-${v.complaints ? `<div class="section-block"><span class="section-label">Chief Complaint: </span>${v.complaints}</div>` : ''}
-${v.diagnosis ? `<div class="section-block"><span class="section-label">Diagnosis: </span><strong>${v.diagnosis}</strong></div>` : ''}
+${v.complaints ? `<div class="section-block"><span class="section-label">Chief Complaint: </span>${escNl(v.complaints)}</div>` : ''}
+${v.diagnosis ? `<div class="section-block"><span class="section-label">Diagnosis: </span><strong>${esc(v.diagnosis)}</strong></div>` : ''}
 ${State.medicines.length ? `<div class="rx-symbol">&#x211E;</div>
-<table class="rx"><thead><tr><th></th><th>Medication</th><th>Dose</th><th>Timings</th><th>Frequency</th><th>Duration</th><th>Qty</th></tr></thead>
+<table class="rx"><thead><tr><th></th><th>Medication</th><th>Route</th><th>Dose</th><th>Timings</th><th>Frequency</th><th>Duration</th></tr></thead>
 <tbody>${medRows}</tbody></table>` : ''}
-${adviceLines.length ? `<div class="advice-section"><div class="section-label">Advice:</div>${adviceLines.map(a => `<div class="advice-item">${a}</div>`).join('')}</div>` : ''}
-${v.followUp ? `<div class="followup-box">Next Visit: ${v.followUp}</div>` : ''}
+${adviceLines.length ? `<div class="advice-section"><div class="section-label">Advice:</div>${adviceLines.map(a => `<div class="advice-item">${esc(a)}</div>`).join('')}</div>` : ''}
+${v.followUp ? `<div class="followup-box">Next Visit: ${esc(v.followUp)}</div>` : ''}
 </div></body></html>`;
 }
 
@@ -2902,16 +2943,16 @@ td { padding:6px 10px;border:1px solid #ddd;font-size:12px; }
   </div>
   <div class="patient-section">
     <div class="info-block">
-      <p><strong>Patient:</strong> ${p.name}</p>
-      <p><strong>ID:</strong> ${p.id} &nbsp; <strong>Age/Sex:</strong> ${age}y / ${p.gender||''}</p>
-      <p><strong>Phone:</strong> ${p.phone||'—'}</p>
+      <p><strong>Patient:</strong> ${esc(p.name)}</p>
+      <p><strong>ID:</strong> ${esc(p.id)} &nbsp; <strong>Age/Sex:</strong> ${age}y / ${esc(p.gender||'')}</p>
+      <p><strong>Phone:</strong> ${esc(p.phone||'—')}</p>
     </div>
-    <div class="info-block" style="text-align:right"><p><strong>Payment Mode:</strong> ${payMode}</p></div>
+    <div class="info-block" style="text-align:right"><p><strong>Payment Mode:</strong> ${esc(payMode)}</p></div>
   </div>
   <table>
     <thead><tr><th>#</th><th>Description</th><th class="amt">Amount (₹)</th></tr></thead>
     <tbody>
-      ${items.map((it,i)=>`<tr><td>${i+1}</td><td>${it.desc}</td><td class="amt">${it.amt>0?it.amt.toLocaleString('en-IN'):'—'}</td></tr>`).join('')}
+      ${items.map((it,i)=>`<tr><td>${i+1}</td><td>${esc(it.desc)}</td><td class="amt">${it.amt>0?it.amt.toLocaleString('en-IN'):'—'}</td></tr>`).join('')}
       <tr class="total-row"><td colspan="2" style="text-align:right">Total</td><td class="amt">₹ ${total.toLocaleString('en-IN')}</td></tr>
     </tbody>
   </table>
@@ -2926,19 +2967,33 @@ async function renderHtmlToPdfBlobA5(html) {
     document.body.appendChild(iframe);
 
     const cleanup = () => { if (iframe.parentNode) document.body.removeChild(iframe); };
-    const timeout = setTimeout(() => { cleanup(); reject(new Error('Invoice PDF render timed out')); }, 15000);
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('Invoice PDF render timed out')); }, 20000);
 
     iframe.onload = async () => {
       try {
         await new Promise(r => setTimeout(r, 500));
-        const canvas = await html2canvas(iframe.contentDocument.body, {
+        const body = iframe.contentDocument.body;
+        const fullHeight = Math.max(body.scrollHeight, body.offsetHeight, 560);
+        const canvas = await html2canvas(body, {
           scale: 2, useCORS: true, allowTaint: true,
-          width: 794, height: 560, windowWidth: 794, windowHeight: 560
+          width: 794, height: fullHeight, windowWidth: 794, windowHeight: fullHeight
         });
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ orientation:'landscape', unit:'px', format:'a5', compress:true });
-        pdf.addImage(canvas.toDataURL('image/jpeg',0.92), 'JPEG', 0, 0,
-          pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const imgW = pageW;
+        const imgH = canvas.height * (pageW / canvas.width);
+        const imgData = canvas.toDataURL('image/jpeg', 0.92);
+        let heightLeft = imgH, position = 0;
+        pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+        heightLeft -= pageH;
+        while (heightLeft > 0.5) {
+          position -= pageH;
+          pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+          heightLeft -= pageH;
+        }
         clearTimeout(timeout);
         resolve(pdf.output('blob'));
       } catch(e) { clearTimeout(timeout); reject(e); }
@@ -2948,40 +3003,67 @@ async function renderHtmlToPdfBlobA5(html) {
   });
 }
 
-// Render prescription + invoice as a combined 2-page PDF
+// Render prescription + invoice as a combined multi-page PDF
 async function renderCombinedPdfBlob(rxHtml, invHtml) {
-  const renderPage = (html, w, h) => new Promise((resolve, reject) => {
+  // Capture full content height so nothing is clipped; return image + its px size
+  const renderPage = (html, w, minH) => new Promise((resolve, reject) => {
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${w}px;height:${h}px;border:none;`;
+    iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${w}px;height:${minH}px;border:none;`;
     document.body.appendChild(iframe);
     const cleanup = () => { if (iframe.parentNode) document.body.removeChild(iframe); };
-    const timeout = setTimeout(() => { cleanup(); reject(new Error('PDF page render timed out')); }, 15000);
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('PDF page render timed out')); }, 20000);
     iframe.onload = async () => {
       try {
         await new Promise(r => setTimeout(r, 500));
-        const canvas = await html2canvas(iframe.contentDocument.body, {
-          scale:2, useCORS:true, allowTaint:true, width:w, height:h, windowWidth:w, windowHeight:h
+        const body = iframe.contentDocument.body;
+        const fullHeight = Math.max(body.scrollHeight, body.offsetHeight, minH);
+        const canvas = await html2canvas(body, {
+          scale:2, useCORS:true, allowTaint:true,
+          width:w, height:fullHeight, windowWidth:w, windowHeight:fullHeight
         });
         clearTimeout(timeout);
-        resolve(canvas.toDataURL('image/jpeg', 0.92));
+        resolve({ data: canvas.toDataURL('image/jpeg', 0.92), cw: canvas.width, ch: canvas.height });
       } catch(e) { clearTimeout(timeout); reject(e); }
       finally { cleanup(); }
     };
     iframe.srcdoc = html;
   });
 
-  const [rxImg, invImg] = await Promise.all([
+  const [rx, inv] = await Promise.all([
     renderPage(rxHtml, 794, 1123),
     renderPage(invHtml, 794, 560)
   ]);
 
   const { jsPDF } = window.jspdf;
-  // Page 1: A4 prescription
   const pdf = new jsPDF({ unit:'px', format:'a4', compress:true });
-  pdf.addImage(rxImg, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
-  // Page 2: A5 landscape invoice
-  pdf.addPage([pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getWidth() * 0.707], 'landscape');
-  pdf.addImage(invImg, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+
+  // Adds an image across as many pages of (pageW×pageH) as needed.
+  // Assumes the target page already exists as the current page.
+  const addPaginated = (img, pageW, pageH, orientation) => {
+    const imgW = pageW;
+    const imgH = img.ch * (pageW / img.cw);
+    let heightLeft = imgH, position = 0;
+    pdf.addImage(img.data, 'JPEG', 0, position, imgW, imgH);
+    heightLeft -= pageH;
+    while (heightLeft > 0.5) {
+      position -= pageH;
+      pdf.addPage([pageW, pageH], orientation);
+      pdf.addImage(img.data, 'JPEG', 0, position, imgW, imgH);
+      heightLeft -= pageH;
+    }
+  };
+
+  // Page(s) 1..n: A4 prescription
+  const a4W = pdf.internal.pageSize.getWidth();
+  const a4H = pdf.internal.pageSize.getHeight();
+  addPaginated(rx, a4W, a4H, 'portrait');
+
+  // Following page(s): A5 landscape invoice
+  const a5W = a4W;
+  const a5H = a4W * 0.707;
+  pdf.addPage([a5W, a5H], 'landscape');
+  addPaginated(inv, a5W, a5H, 'landscape');
+
   return pdf.output('blob');
 }
 
@@ -3066,24 +3148,42 @@ const PdfDriveQueue = [];
 async function renderHtmlToPdfBlob(html) {
   return new Promise((resolve, reject) => {
     const iframe = document.createElement('iframe');
+    // Start at one A4 page tall; it grows to fit the real content below.
     iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;';
     document.body.appendChild(iframe);
 
     const cleanup = () => { if (iframe.parentNode) document.body.removeChild(iframe); };
-    const timeout = setTimeout(() => { cleanup(); reject(new Error('PDF render timed out')); }, 15000);
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('PDF render timed out')); }, 20000);
 
     iframe.onload = async () => {
       try {
         await new Promise(r => setTimeout(r, 500)); // let fonts/images settle
-        const canvas = await html2canvas(iframe.contentDocument.body, {
+        const body = iframe.contentDocument.body;
+        // Capture the FULL content height so nothing at the bottom is clipped
+        const fullHeight = Math.max(body.scrollHeight, body.offsetHeight, 1123);
+        const canvas = await html2canvas(body, {
           scale: 2, useCORS: true, allowTaint: true,
-          width: 794, height: 1123,
-          windowWidth: 794, windowHeight: 1123
+          width: 794, height: fullHeight,
+          windowWidth: 794, windowHeight: fullHeight
         });
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ unit: 'px', format: 'a4', compress: true });
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const imgW = pageW;
+        const imgH = canvas.height * (pageW / canvas.width);
         const imgData = canvas.toDataURL('image/jpeg', 0.92);
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
+        // Slice the tall image across as many A4 pages as needed
+        let heightLeft = imgH;
+        let position = 0;
+        pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+        heightLeft -= pageH;
+        while (heightLeft > 0.5) {
+          position -= pageH;
+          pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+          heightLeft -= pageH;
+        }
         clearTimeout(timeout);
         resolve(pdf.output('blob'));
       } catch(e) { clearTimeout(timeout); reject(e); }
