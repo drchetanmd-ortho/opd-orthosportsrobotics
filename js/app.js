@@ -2860,7 +2860,13 @@ async function buildPrescriptionHtml() {
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family: Arial, sans-serif; font-size:11px; color:#000; background:#fff; }
-.page { width:210mm; padding:12mm 14mm 20mm; }
+.page { width:210mm; min-height:297mm; padding:12mm 14mm 10mm; display:flex; flex-direction:column; }
+.page-content { flex:1; }
+.footer { margin-top:auto; border-top:1.5px solid #000; padding-top:8px; }
+.footer-label { font-weight:700; font-size:10px; text-decoration:underline; margin-bottom:6px; }
+.footer-locs { display:flex; justify-content:space-between; }
+.footer-loc { width:48%; font-size:9px; line-height:1.5; }
+.footer-loc-name { font-weight:700; font-size:10px; }
 .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:8px; }
 .doctor-name { font-size:20px; font-weight:900; }
 .doctor-title { font-size:10px; font-weight:700; margin:3px 0 2px; }
@@ -2878,6 +2884,7 @@ table.rx td { padding:3px 6px; vertical-align:top; font-size:10px; }
 .advice-item::before { content:'•'; position:absolute; left:0; }
 ${v.followUp ? `.followup-box { margin-top:10px; border:1px dashed #999; padding:5px 10px; font-size:10.5px; display:inline-block; }` : ''}
 </style></head><body><div class="page">
+<div class="page-content">
 <div class="header">
   <div>
     <div class="doctor-name">${DOCTOR.name}</div>
@@ -2897,6 +2904,18 @@ ${State.medicines.length ? `<div class="rx-symbol">&#x211E;</div>
 <tbody>${medRows}</tbody></table>` : ''}
 ${adviceLines.length ? `<div class="advice-section"><div class="section-label">Advice:</div>${adviceLines.map(a => `<div class="advice-item">${esc(a)}</div>`).join('')}</div>` : ''}
 ${v.followUp ? `<div class="followup-box">Next Visit: ${esc(v.followUp)}</div>` : ''}
+</div>
+<div class="footer">
+  <div class="footer-label">CONSULTATION LOCATIONS:</div>
+  <div class="footer-locs">
+    ${DOCTOR.clinics.map(c => `
+      <div class="footer-loc">
+        <div class="footer-loc-name">${esc(c.name)}</div>
+        <div>${escNl(c.address)}</div>
+        <div>${esc(c.hours)}</div>
+      </div>`).join('')}
+  </div>
+</div>
 </div></body></html>`;
 }
 
