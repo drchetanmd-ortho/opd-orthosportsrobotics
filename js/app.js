@@ -2898,12 +2898,19 @@ ${v.followUp ? `.followup-box { margin-top:10px; border:1px dashed #999; padding
   <span>${formatDateTime(now)}</span>
 </div>
 ${v.complaints ? `<div class="section-block"><span class="section-label">Chief Complaint: </span>${escNl(v.complaints)}</div>` : ''}
-${v.diagnosis ? `<div class="section-block"><span class="section-label">Diagnosis: </span><strong>${esc(v.diagnosis)}</strong></div>` : ''}
+${v.hopi ? `<div class="section-block"><span class="section-label">History of Present Illness: </span>${escNl(v.hopi)}</div>` : ''}
+${v.pastHistory ? `<div class="section-block"><span class="section-label">Past Medical History: </span>${escNl(v.pastHistory)}</div>` : ''}
+${v.allergies ? `<div class="section-block"><span class="section-label">Allergies: </span>${escNl(v.allergies)}</div>` : ''}
+${v.examination ? `<div class="section-block"><span class="section-label">Examination: </span>${escNl(v.examination)}</div>` : ''}
+${v.investigations ? `<div class="section-block"><span class="section-label">Investigations: </span>${escNl(v.investigations)}</div>` : ''}
+${v.diagnosis ? `<div class="section-block"><span class="section-label">Diagnosis: </span><strong>${esc(v.diagnosis)}</strong>${v.icd10 ? ` <span style="color:#666;font-size:10px;">(${esc(v.icd10)})</span>` : ''}</div>` : ''}
 ${State.medicines.length ? `<div class="rx-symbol">&#x211E;</div>
 <table class="rx"><thead><tr><th></th><th>Medication</th><th>Route</th><th>Dose</th><th>Timings</th><th>Frequency</th><th>Duration</th></tr></thead>
 <tbody>${medRows}</tbody></table>` : ''}
 ${adviceLines.length ? `<div class="advice-section"><div class="section-label">Advice:</div>${adviceLines.map(a => `<div class="advice-item">${esc(a)}</div>`).join('')}</div>` : ''}
-${v.followUp ? `<div class="followup-box">Next Visit: ${esc(v.followUp)}</div>` : ''}
+${v.procedure ? `<div class="section-block" style="margin-top:8px;"><span class="section-label">Procedure Done: </span>${escNl(v.procedure)}</div>` : ''}
+${v.followUp ? `<div class="followup-box"><strong>Follow Up:</strong> ${esc(v.followUp)}</div>` : ''}
+${v.referredTo ? `<div class="section-block" style="margin-top:6px;"><span class="section-label">Referred To: </span>${escNl(v.referredTo)}</div>` : ''}
 </div>
 <div class="footer">
   <div class="footer-label">CONSULTATION LOCATIONS:</div>
