@@ -250,7 +250,7 @@
                 <th>Medicine</th>
                 <th style="width:110px">Route</th>
                 <th style="width:110px">Frequency</th>
-                <th style="width:130px">Schedule</th>
+                <th style="width:150px">Schedule</th>
                 <th style="width:55px">Dosage</th>
                 <th style="width:120px">Instructions</th>
                 <th style="width:120px">Duration</th>
@@ -746,37 +746,68 @@ if ('serviceWorker' in navigator) {
         </div>
         <div style="display:flex;gap:8px;">
           <div style="flex:1">
-            <label class="modal-label">Default Dosage</label>
-            <select id="nm-dosage" class="modal-input">
-              <option>1-0-0</option><option>0-1-0</option><option>0-0-1</option>
-              <option>1-1-0</option><option>1-0-1</option><option>0-1-1</option>
-              <option>1-1-1</option><option>1-1-1-1</option><option>SOS</option><option>As Directed</option>
+            <label class="modal-label">Route</label>
+            <select id="nm-route" class="modal-input">
+              <option>Oral</option><option>Sublingual</option><option>Eye</option><option>Ear</option>
+              <option>Nasal</option><option>Inhalation</option><option>Puff</option><option>Skin</option>
+              <option>Topical</option><option>Transdermal</option><option>Local</option>
+              <option>Intramuscular</option><option>IV Injection</option><option>IV Infusion</option>
+              <option>Subcutaneous</option><option>Intradermal</option><option>Intra-articular</option>
+              <option>Intrathecal</option><option>Epidural</option><option>Rectal</option>
+              <option>Vaginal</option><option>RT</option><option>As Directed</option>
             </select>
           </div>
           <div style="flex:1">
-            <label class="modal-label">Administration</label>
-            <select id="nm-admin" class="modal-input">
-              <option>After Food</option><option>Before Food</option><option>Empty Stomach</option>
-              <option>With Food</option><option>At Bedtime</option><option>With Milk</option><option>As Directed</option>
+            <label class="modal-label">Frequency</label>
+            <select id="nm-freq" class="modal-input">
+              <option>Once a day</option><option>Twice Daily</option><option>Thrice Daily</option>
+              <option>Four times a day</option><option>Five times a day</option><option>Six times a day</option>
+              <option>Every hour</option><option>Every 2 hours</option><option>Every 4 hours</option><option>Every 6 hours</option>
+              <option>Once a week</option><option>Twice a week</option><option>Thrice a week</option>
+              <option>Alternate days</option><option>Once a month</option><option>Twice a month</option>
+              <option>Once in six months</option><option>Bed Time</option><option>Once</option>
+              <option>Continuous</option><option>SOS / As required</option><option>As Directed</option>
             </select>
           </div>
         </div>
         <div style="display:flex;gap:8px;">
           <div style="flex:1">
-            <label class="modal-label">Frequency</label>
-            <select id="nm-freq" class="modal-input">
-              <option>Once Daily</option><option>Twice Daily</option><option>Thrice Daily</option>
-              <option>Four Times Daily</option><option>Weekly</option><option>Alternate Days</option>
+            <label class="modal-label">Schedule</label>
+            <select id="nm-dosage" class="modal-input">
+              <option>1-0-0 (Morning)</option><option>0-1-0 (Afternoon)</option><option>0-0-1 (Night)</option>
+              <option>1-1-0 (Morning-Afternoon)</option><option>1-0-1 (Morning-Night)</option>
+              <option>0-1-1 (Afternoon-Night)</option><option>1-1-1 (Morning-Afternoon-Night)</option>
+              <option>1-1-1-1 (Morning-Afternoon-Evening-Night)</option>
+              <option>Evening</option><option>Morning-Evening</option><option>Evening-Night</option>
+              <option>Morning-Afternoon-Evening</option><option>Morning-Evening-Night</option>
               <option>SOS</option><option>As Directed</option>
             </select>
           </div>
           <div style="flex:1">
-            <label class="modal-label">Duration</label>
-            <select id="nm-dur" class="modal-input">
-              <option>5 Days</option><option>7 Days</option><option>10 Days</option>
-              <option>14 Days</option><option>1 Month</option><option>2 Months</option>
-              <option>3 Months</option><option>6 Months</option><option>As Directed</option>
+            <label class="modal-label">Instructions</label>
+            <select id="nm-admin" class="modal-input">
+              <option>After meals</option><option>Before meals</option><option>With meals</option>
+              <option>Empty stomach</option>
+              <option>Before Breakfast</option><option>With Breakfast</option><option>After Breakfast</option>
+              <option>Before Lunch</option><option>With Lunch</option><option>After Lunch</option>
+              <option>Before Dinner</option><option>With Dinner</option><option>After Dinner</option>
+              <option>At Bedtime</option><option>At Night</option><option>With Milk</option>
+              <option>As directed</option>
             </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1">
+            <label class="modal-label">Duration</label>
+            <div style="display:flex;gap:6px;">
+              <input id="nm-dur-num" class="modal-input" type="number" min="1" placeholder="e.g. 5" style="flex:1">
+              <select id="nm-dur-unit" class="modal-input" style="width:100px">
+                <option>Days</option><option>Weeks</option><option>Months</option><option>Years</option>
+              </select>
+            </div>
+          </div>
+          <div style="flex:1;display:flex;align-items:flex-end;">
+            <span style="font-size:11px;color:#7a9aaa;padding-bottom:8px;">Leave number blank for "As Directed"</span>
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:4px;">

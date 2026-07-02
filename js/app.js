@@ -774,10 +774,11 @@ const FREQ_OPTS = [
   'Bed Time','Once','Continuous','SOS / As required','As Directed'
 ];
 const SCHEDULE_OPTS = [
-  'Morning','Afternoon','Evening','Night',
-  'Morning-Afternoon','Morning-Evening','Morning-Night','Afternoon-Evening','Afternoon-Night','Evening-Night',
-  'Morning-Afternoon-Evening','Morning-Afternoon-Night','Morning-Evening-Night',
-  'Morning-Afternoon-Evening-Night','As Directed'
+  '1-0-0 (Morning)','0-1-0 (Afternoon)','0-0-1 (Night)',
+  '1-1-0 (Morning-Afternoon)','1-0-1 (Morning-Night)','0-1-1 (Afternoon-Night)',
+  '1-1-1 (Morning-Afternoon-Night)','1-1-1-1 (Morning-Afternoon-Evening-Night)',
+  'Evening','Morning-Evening','Evening-Night','Morning-Afternoon-Evening','Morning-Evening-Night',
+  'SOS','As Directed'
 ];
 const INSTR_OPTS = [
   'As directed','Empty stomach','Before meals','With meals','After meals',
@@ -802,16 +803,21 @@ function routeFromType(type) {
   }
 }
 
-// Convert legacy "1-0-1"-style timings to a schedule label
+// Convert legacy "1-0-1"-style timings (or word-only schedules) to the
+// combined "1-0-1 (Morning-Night)" label
 function schedFromTimings(t) {
   const map = {
-    '1-0-0':'Morning','0-1-0':'Afternoon','0-0-1':'Night',
-    '1-1-0':'Morning-Afternoon','1-0-1':'Morning-Night','0-1-1':'Afternoon-Night',
-    '1-1-1':'Morning-Afternoon-Night','1-1-1-1':'Morning-Afternoon-Evening-Night'
+    '1-0-0':'1-0-0 (Morning)','0-1-0':'0-1-0 (Afternoon)','0-0-1':'0-0-1 (Night)',
+    '1-1-0':'1-1-0 (Morning-Afternoon)','1-0-1':'1-0-1 (Morning-Night)','0-1-1':'0-1-1 (Afternoon-Night)',
+    '1-1-1':'1-1-1 (Morning-Afternoon-Night)','1-1-1-1':'1-1-1-1 (Morning-Afternoon-Evening-Night)',
+    'SOS':'SOS','As Directed':'As Directed','As directed':'As Directed'
   };
   if (map[t]) return map[t];
   if (SCHEDULE_OPTS.includes(t)) return t;
-  return 'Morning';
+  // Word-only value from an older save (e.g. "Morning-Night") → find its combined label
+  const match = SCHEDULE_OPTS.find(o => o === t || o.endsWith(`(${t})`));
+  if (match) return match;
+  return '1-0-0 (Morning)';
 }
 
 // Normalise legacy instruction wording to the new list
@@ -938,7 +944,7 @@ function addMedicine(med) {
     frequency: FREQ_OPTS.includes(med.frequency) ? med.frequency : 'Once a day',
     schedule: schedFromTimings(med.timings),
     dosage: med.dose || '1',
-    instructions: med.type === 'INJ' ? 'As directed' : normInstr(med.timingsNote),
+    instructions: normInstr(med.timingsNote),
     duration: med.duration,
     // legacy fields kept for templates/old visits
     dose: med.dose,
@@ -1052,7 +1058,7 @@ function openAddMedModal() {
 
 function closeAddMedModal() {
   document.getElementById('modal-add-med').style.display = 'none';
-  ['nm-brand','nm-content'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['nm-brand','nm-content','nm-dur-num'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const paste = document.getElementById('am-paste-text'); if (paste) paste.value = '';
   const status = document.getElementById('am-paste-status'); if (status) status.textContent = '';
   const preview = document.getElementById('am-paste-preview'); if (preview) preview.style.display = 'none';
@@ -1078,17 +1084,20 @@ function smartAddFromPaste() {
 function saveNewMed() {
   const brand = document.getElementById('nm-brand').value.trim();
   if (!brand) { toast('Brand name is required', 'error'); return; }
+  const durNum = document.getElementById('nm-dur-num').value.trim();
+  const durUnit = document.getElementById('nm-dur-unit').value || 'Days';
   const newMed = {
     id: 'cm_' + Date.now(),
     brand,
     content: document.getElementById('nm-content').value.trim(),
     type: document.getElementById('nm-type').value,
     form: document.getElementById('nm-type').value,
-    timings: document.getElementById('nm-dosage').value,
-    timingsNote: document.getElementById('nm-admin').value,
+    route: document.getElementById('nm-route').value,
+    timings: document.getElementById('nm-dosage').value,       // schedule, e.g. "1-0-1 (Morning-Night)"
+    timingsNote: document.getElementById('nm-admin').value,    // instructions
     frequency: document.getElementById('nm-freq').value,
-    duration: document.getElementById('nm-dur').value,
-    dose: document.getElementById('nm-dosage').value,
+    duration: durNum ? `${durNum} ${durUnit}` : 'As Directed',
+    dose: '1',
     qty: '',
     indications: []
   };
@@ -1468,7 +1477,7 @@ function applyTemplateById(id) {
         frequency: FREQ_OPTS.includes(item.frequency) ? item.frequency : 'Once a day',
         schedule: schedFromTimings(item.timings || med.timings),
         dosage: item.dose || med.dose || '1',
-        instructions: med.type === 'INJ' ? 'As directed' : normInstr(item.timingsNote || med.timingsNote),
+        instructions: normInstr(item.timingsNote || med.timingsNote),
         dose: item.dose || med.dose,
         timings: item.timings || med.timings,
         timingsNote: item.timingsNote || med.timingsNote,
