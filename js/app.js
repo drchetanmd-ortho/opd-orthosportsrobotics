@@ -903,6 +903,36 @@ function renderMedicineTable() {
     </tr>`;
 
   tbody.innerHTML = rows + addRow;
+
+  // Keep the right-panel medicine browser's ✓ marks in sync with the current
+  // prescription — covers patient switches, visit loads, template applies, etc.
+  if (typeof refreshAlphaList === 'function') refreshAlphaList();
+  renderRxMedChips();
+}
+
+// Pre-placed medicine boxes below the Rx table — one per medicine in the
+// master list. Tap to add to the prescription; tap again to remove.
+function renderRxMedChips() {
+  const wrap = document.getElementById('rx-med-chips');
+  if (!wrap) return;
+  const added = new Set(State.medicines.map(m => String(m.med.id)));
+  wrap.innerHTML = [...MEDICINE_DB]
+    .sort((a, b) => (a.brand || '').localeCompare(b.brand || ''))
+    .map(m => {
+      const idx = MEDICINE_DB.indexOf(m);
+      const on = added.has(String(m.id));
+      return `<button class="rx-chip${on ? ' rx-chip-on' : ''}" onclick="toggleRxChip(${idx})" title="${esc(m.content || '')}">
+        <span class="rx-chip-type" style="${typeBadgeStyle(m.type)}">${esc(m.type)}</span>${esc(m.brand)}${on ? ' ✓' : ''}
+      </button>`;
+    }).join('');
+}
+
+function toggleRxChip(dbIdx) {
+  const med = MEDICINE_DB[dbIdx];
+  if (!med) return;
+  const i = State.medicines.findIndex(m => String(m.med.id) === String(med.id));
+  if (i >= 0) removeMed(i);
+  else addMedicine(med);
 }
 
 function updateMedName(idx, field, value) {
@@ -920,7 +950,6 @@ function updateMed(idx, field, value) {
 function removeMed(idx) {
   State.medicines.splice(idx, 1);
   renderMedicineTable();
-  refreshAlphaList();
   scheduleAutoSave();
 }
 
@@ -953,7 +982,6 @@ function addMedicine(med) {
     qty: med.qty || ''
   });
   renderMedicineTable();
-  refreshAlphaList();
   scheduleAutoSave();
   // Keep right-panel dropdown open
   const ms = document.getElementById('med-search');
@@ -1050,14 +1078,56 @@ function deleteMed(id) {
   if (MEDICINE_DB.length < before) toast(`${brand} deleted`);
 }
 
+let _editMedId = null;   // id of the medicine being edited, null = adding new
+
 function openAddMedModal() {
+  _editMedId = null;
+  document.getElementById('nm-modal-title').textContent = 'Add Medicine';
+  document.getElementById('nm-save-btn').textContent = 'Add to Medicine List';
+  document.getElementById('modal-add-med').style.display = 'flex';
+  switchAddTab('manual');
+  setTimeout(() => document.getElementById('nm-brand').focus(), 50);
+}
+
+// Set a select's value; if the stored value isn't among the options, add it
+function _setSelVal(id, val) {
+  const sel = document.getElementById(id);
+  if (!sel || val == null || val === '') return;
+  sel.value = val;
+  if (sel.value !== val) {
+    const opt = document.createElement('option');
+    opt.textContent = val; opt.value = val; opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+// Open the modal pre-filled with an existing medicine's details for editing
+function editMed(id) {
+  const med = MEDICINE_DB.find(m => String(m.id) === String(id));
+  if (!med) return;
+  _editMedId = med.id;
+  document.getElementById('nm-modal-title').textContent = 'Edit Medicine';
+  document.getElementById('nm-save-btn').textContent = 'Save Changes';
+  document.getElementById('nm-brand').value = med.brand || '';
+  document.getElementById('nm-content').value = med.content || '';
+  _setSelVal('nm-type', med.type || 'TAB');
+  _setSelVal('nm-route', med.route || routeFromType(med.type));
+  _setSelVal('nm-freq', FREQ_OPTS.includes(med.frequency) ? med.frequency : 'Once a day');
+  _setSelVal('nm-dosage', schedFromTimings(med.timings));
+  _setSelVal('nm-admin', normInstr(med.timingsNote));
+  const d = parseDuration(med.duration);
+  document.getElementById('nm-dur-num').value = d.num;
+  _setSelVal('nm-dur-unit', d.unit);
   document.getElementById('modal-add-med').style.display = 'flex';
   switchAddTab('manual');
   setTimeout(() => document.getElementById('nm-brand').focus(), 50);
 }
 
 function closeAddMedModal() {
+  _editMedId = null;
   document.getElementById('modal-add-med').style.display = 'none';
+  document.getElementById('nm-modal-title').textContent = 'Add Medicine';
+  document.getElementById('nm-save-btn').textContent = 'Add to Medicine List';
   ['nm-brand','nm-content','nm-dur-num'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const paste = document.getElementById('am-paste-text'); if (paste) paste.value = '';
   const status = document.getElementById('am-paste-status'); if (status) status.textContent = '';
@@ -1086,8 +1156,7 @@ function saveNewMed() {
   if (!brand) { toast('Brand name is required', 'error'); return; }
   const durNum = document.getElementById('nm-dur-num').value.trim();
   const durUnit = document.getElementById('nm-dur-unit').value || 'Days';
-  const newMed = {
-    id: 'cm_' + Date.now(),
+  const fields = {
     brand,
     content: document.getElementById('nm-content').value.trim(),
     type: document.getElementById('nm-type').value,
@@ -1096,12 +1165,24 @@ function saveNewMed() {
     timings: document.getElementById('nm-dosage').value,       // schedule, e.g. "1-0-1 (Morning-Night)"
     timingsNote: document.getElementById('nm-admin').value,    // instructions
     frequency: document.getElementById('nm-freq').value,
-    duration: durNum ? `${durNum} ${durUnit}` : 'As Directed',
-    dose: '1',
-    qty: '',
-    indications: []
+    duration: durNum ? `${durNum} ${durUnit}` : 'As Directed'
   };
-  MEDICINE_DB.push(newMed);
+
+  if (_editMedId != null) {
+    // Editing an existing medicine — update it in place, keep its id
+    const med = MEDICINE_DB.find(m => String(m.id) === String(_editMedId));
+    if (med) {
+      Object.assign(med, fields);
+      saveMedList();
+      closeAddMedModal();
+      refreshAlphaList();
+      toast('✓ ' + brand + ' updated');
+      return;
+    }
+    // fall through to add if it vanished (deleted in another tab)
+  }
+
+  MEDICINE_DB.push({ id: 'cm_' + Date.now(), ...fields, dose: '1', qty: '', indications: [] });
   saveMedList();
   closeAddMedModal();
   refreshAlphaList();
@@ -1292,7 +1373,7 @@ function bindMedRowLongPress() {
 
   list.addEventListener('pointerdown', e => {
     suppressClick = false;
-    if (e.target.closest('.med-del-btn')) return;          // pressing the ✕ itself
+    if (e.target.closest('.med-del-btn') || e.target.closest('.med-edit-btn')) return; // pressing ✕/✎ itself
     const row = e.target.closest('.med-alpha-row');
     if (!row) return;
     sx = e.clientX; sy = e.clientY;
@@ -1357,6 +1438,7 @@ function renderMedBrowserList(query) {
           <div class="med-alpha-content">${hl(m.content)}</div>
         </div>
         ${isAdded ? '<span class="med-alpha-tick">✓</span>' : ''}
+        <button class="med-edit-btn" title="Edit medicine details" onclick="event.stopPropagation();editMed('${m.id}')">✎</button>
         <button class="med-del-btn" title="Delete from list" onclick="event.stopPropagation();deleteMed('${m.id}')">✕</button>
       </div>`;
     }).join('');
@@ -2624,24 +2706,103 @@ function gdriveAutoReconnect() {
 document.addEventListener('DOMContentLoaded', init);
 
 // ─── Backup & Restore ─────────────────────────────────────────────────────────
+// Main Backup button: opens the modal on the Local tab (backup/restore only).
+// Google Drive and PDF folder live in their own tabs, each with its own
+// "Backup Now" button — nothing runs automatically.
 function openBackupModal() {
   document.getElementById("modal-backup").style.display = "flex";
   const cid = localStorage.getItem("gdrive_client_id") || "";
   document.getElementById("gdrive-client-id").value = cid;
   updateGdriveUI();
   updatePdfFolderUI();
+  switchBackupTab('local');
+}
 
-  // Trigger Drive backup immediately when Backup button pressed (skip if already running)
-  if (GDrive.token && !GDrive._backupInProgress) {
-    toast('Backing up to Google Drive…', 'success', 2000);
-    GDrive._backupInProgress = true;
-    gdriveBackupNow()
-      .then(() => toast('Drive backup complete ✓', 'success', 3000))
-      .catch(() => toast('Drive backup failed', 'error'))
-      .finally(() => { GDrive._backupInProgress = false; });
+function switchBackupTab(which) {
+  ['local', 'drive', 'pdf'].forEach(t => {
+    document.getElementById(`bk-tab-${t}`)?.classList.toggle('active', t === which);
+    const pane = document.getElementById(`bk-pane-${t}`);
+    if (pane) pane.style.display = t === which ? 'block' : 'none';
+  });
+}
+
+// "Backup Now" in the Google Drive section — full JSON of ALL patients to Drive
+function driveBackupNowClick() {
+  if (!GDrive.token) { toast('Connect Google Drive first', 'error'); return; }
+  if (GDrive._backupInProgress) { toast('Drive backup already running…', 'warning'); return; }
+  toast('Backing up all patients to Google Drive…', 'success', 2500);
+  GDrive._backupInProgress = true;
+  gdriveBackupNow()
+    .then(() => toast('Drive backup complete ✓ (all patients)', 'success', 3500))
+    .catch(() => toast('Drive backup failed', 'error'))
+    .finally(() => { GDrive._backupInProgress = false; });
+}
+
+// "Backup Now" in the PDF folder section — regenerates prescription PDFs for
+// ALL patients' visits changed since the last run (not just the open patient).
+const PDF_ALL_KEY = 'pdf_backup_all_at';
+let _pdfAllRunning = false;
+
+async function backupAllPdfsNow() {
+  if (_pdfAllRunning) { toast('PDF backup already running…', 'warning'); return; }
+  if (!PdfStore.dirHandle && !GDrive.token) {
+    toast('Select a folder or connect Drive first', 'error'); return;
   }
-  if (PdfStore.dirHandle && State.currentPatient && State.currentVisit) {
-    savePrescriptionPdf();
+  _pdfAllRunning = true;
+  try {
+    const since = parseInt(localStorage.getItem(PDF_ALL_KEY) || '0', 10);
+    const patients = await DB.getAllPatients();
+    const jobs = [];
+    for (const p of patients) {
+      const visits = await DB.getPatientVisits(p.id);
+      for (const v of visits) {
+        const changedAt = v.savedAt || v.date || 0;
+        if (changedAt > since) jobs.push({ p, v });
+      }
+    }
+    if (!jobs.length) { toast('All prescriptions already backed up ✓', 'success', 3000); return; }
+    if (jobs.length > 25 &&
+        !confirm(`Generate & back up ${jobs.length} prescription PDFs?\n\nThis may take a few minutes.`)) return;
+
+    // Temporarily swap State to render each visit's PDF, then restore
+    const keep = { p: State.currentPatient, v: State.currentVisit, m: State.medicines };
+    let done = 0, failed = 0;
+    toast(`Backing up ${jobs.length} prescription${jobs.length > 1 ? 's' : ''}…`, 'success', 3000);
+    for (const { p, v } of jobs) {
+      try {
+        State.currentPatient = p;
+        State.currentVisit = v;
+        State.medicines = (v.medicines || []).map(m => ({
+          med: { id: m.id, brand: m.brand, content: m.content, type: m.type, form: m.form },
+          route: m.route || routeFromType(m.type),
+          schedule: m.schedule || schedFromTimings(m.timings),
+          dosage: m.dosage || m.dose || '1',
+          instructions: m.instructions || normInstr(m.timingsNote),
+          dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
+          frequency: m.frequency || 'Once a day',
+          duration: m.duration || 'As Directed',
+          qty: m.qty || '', details: m.details || '', notes: m.notes || ''
+        }));
+        const html = await buildPrescriptionHtml();
+        if (!html) { failed++; continue; }
+        const blob = await renderHtmlToPdfBlob(html);
+        const phone = (p.phone || '').replace(/\D/g, '');
+        const visitDate = v.date
+          ? new Date(v.date).toISOString().slice(0, 10).replace(/-/g, '')
+          : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        await autoBackupPdf(blob, `${visitDate}-${phone}-RX.pdf`, p.id);
+        done++;
+      } catch (e) { console.error('PDF backup failed for', p.id, e); failed++; }
+    }
+    // Restore whatever was open before
+    State.currentPatient = keep.p; State.currentVisit = keep.v; State.medicines = keep.m;
+    if (keep.p) renderMedicineTable();
+
+    localStorage.setItem(PDF_ALL_KEY, String(Date.now()));
+    setLastBackupInfo(`PDF backup: ${done} saved${failed ? `, ${failed} failed` : ''} at ${new Date().toLocaleTimeString('en-IN')}`);
+    toast(`✓ ${done} prescription PDF${done !== 1 ? 's' : ''} backed up${failed ? ` · ${failed} failed` : ''}`, failed ? 'warning' : 'success', 4500);
+  } finally {
+    _pdfAllRunning = false;
   }
 }
 function closeBackupModal() {
