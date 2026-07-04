@@ -447,6 +447,13 @@ function initMobilePanels() {
 }
 
 async function loadPatient(id) {
+  if (_pdfAllRunning) { toast('PDF backup running — please wait a moment…', 'warning'); return; }
+  // Flush any pending autosave of the patient being left, so their last
+  // keystrokes aren't lost when we swap State to the new patient.
+  if (State.currentPatient && State.currentVisit) {
+    clearTimeout(_autoSaveTimer);
+    try { await _autoSaveNow(); } catch (e) { console.warn('Flush save on switch failed', e); }
+  }
   const patient = await DB.getPatient(id);
   if (!patient) return;
   State.currentPatient = patient;
@@ -668,17 +675,27 @@ function fillPatientForm(p) {
   calcBMI();
 }
 
+let _savingPatient = false;
 async function saveNewPatient() {
+  if (_savingPatient) return;                       // guard against double-tap
   const data = gatherPatientFormData();
   if (!data.name) { toast('Patient name is required', 'error'); return; }
   if (!data.phone || data.phone.replace(/\D/g,'').length < 6) { toast('Valid phone number is required', 'error'); return; }
-  const id = await DB.generatePatientId(data.phone);
-  const patient = { id, ...data, age: data.age || calcAge(data.dob), createdAt: Date.now(), lastVisit: Date.now() };
-  await DB.savePatient(patient);
-  State.recentPatients.unshift(patient);
-  closeNewPatientModal();
-  await loadPatient(id);
-  toast(`Patient ${data.name} registered as ${id}`);
+  _savingPatient = true;
+  try {
+    const id = await DB.generatePatientId(data.phone);
+    const patient = { id, ...data, age: data.age || calcAge(data.dob), createdAt: Date.now(), lastVisit: Date.now() };
+    await DB.savePatient(patient);
+    State.recentPatients.unshift(patient);
+    closeNewPatientModal();
+    await loadPatient(id);
+    toast(`Patient ${data.name} registered as ${id}`);
+  } catch (e) {
+    console.error('Patient registration failed', e);
+    toast('Could not save patient — please try again', 'error');
+  } finally {
+    _savingPatient = false;
+  }
 }
 
 function openEditPatientModal() {
@@ -731,34 +748,54 @@ function updateVisitField(field, value) {
 }
 
 let _autoSaveTimer = null;
+let _pdfAllRunning = false;   // true while the all-patients PDF sweep has State swapped
+// Persist the on-screen form + medicines into the current visit immediately.
+async function _autoSaveNow() {
+  // While the all-patients PDF sweep has State swapped, the on-screen form
+  // belongs to a different patient — never mix the two.
+  if (_pdfAllRunning) return;
+  if (!State.currentPatient || !State.currentVisit) return;
+  const fields = ['complaints','hopi','past-history','allergies','examination',
+    'investigations','diagnosis','icd10','advice','follow-up','referred-to','procedure','notes'];
+  fields.forEach(f => {
+    const el = document.getElementById('field-' + f);
+    if (el) {
+      const key = f.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      State.currentVisit[key === 'followUp' ? 'followUp' : key] = el.value;
+    }
+  });
+  State.currentVisit.medicines = State.medicines.map(m => ({
+    id: m.med.id, brand: m.med.brand, content: m.med.content,
+    type: m.med.type, form: m.med.form,
+    route: m.route || routeFromType(m.med.type),
+    schedule: m.schedule || schedFromTimings(m.timings),
+    dosage: m.dosage || m.dose || '1',
+    instructions: m.instructions || normInstr(m.timingsNote),
+    dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
+    frequency: m.frequency, duration: m.duration, qty: m.qty,
+    details: m.details || '', notes: m.notes || ''
+  }));
+  await DB.saveVisit(State.currentVisit);
+}
+
 function scheduleAutoSave() {
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(async () => {
-    if (!State.currentPatient || !State.currentVisit) return;
-    // Collect current field values
-    const fields = ['complaints','hopi','past-history','allergies','examination',
-      'investigations','diagnosis','icd10','advice','follow-up','referred-to','procedure','notes'];
-    fields.forEach(f => {
-      const el = document.getElementById('field-' + f);
-      if (el) {
-        const key = f.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-        State.currentVisit[key === 'followUp' ? 'followUp' : key] = el.value;
-      }
-    });
-    State.currentVisit.medicines = State.medicines.map(m => ({
-      id: m.med.id, brand: m.med.brand, content: m.med.content,
-      type: m.med.type, form: m.med.form,
-      route: m.route || routeFromType(m.med.type),
-      schedule: m.schedule || schedFromTimings(m.timings),
-      dosage: m.dosage || m.dose || '1',
-      instructions: m.instructions || normInstr(m.timingsNote),
-      dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
-      frequency: m.frequency, duration: m.duration, qty: m.qty,
-      details: m.details || '', notes: m.notes || ''
-    }));
-    await DB.saveVisit(State.currentVisit);
+    // Never autosave while the all-patients PDF sweep has State swapped to
+    // another patient — the form fields on screen belong to someone else.
+    if (_pdfAllRunning) return;
+    await _autoSaveNow();
   }, 1500);
 }
+
+// Best-effort flush when the tab closes / refreshes — IndexedDB writes started
+// here almost always complete, shrinking the data-loss window to near zero.
+window.addEventListener('beforeunload', () => {
+  if (!_pdfAllRunning && State.currentPatient && State.currentVisit) {
+    clearTimeout(_autoSaveTimer);
+    _autoSaveNow();
+  }
+});
 
 // ─── Medicine Table ───────────────────────────────────────────────────────────
 const ROUTE_OPTS = [
@@ -852,7 +889,7 @@ function updateDuration(idx) {
 function rxSel(opts, val, idx, field) {
   const hasVal = opts.includes(val);
   return `<select class="rx-sel" onchange="updateMed(${idx},'${field}',this.value)">
-    ${!hasVal && val ? `<option value="${val}" selected>${val}</option>` : ''}
+    ${!hasVal && val ? `<option value="${esc(val)}" selected>${esc(val)}</option>` : ''}
     ${opts.map(o => `<option value="${o}"${o===val?' selected':''}>${o}</option>`).join('')}
   </select>`;
 }
@@ -893,11 +930,15 @@ function renderMedicineTable() {
     <tr class="rx-add-row" id="rx-add-row">
       <td class="rx-num" style="color:var(--text3)">${State.medicines.length + 1}</td>
       <td colspan="9" style="position:relative;">
-        <input id="rx-inline-search" class="rx-inline-search" type="text"
-          placeholder="Search and add medicine…"
-          autocomplete="off" spellcheck="false"
-          oninput="rxInlineSearch(this.value)"
-          onfocus="rxInlineSearch(this.value)">
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input id="rx-inline-search" class="rx-inline-search" type="text"
+            placeholder="Search and add medicine…"
+            autocomplete="off" spellcheck="false" style="flex:1"
+            oninput="rxInlineSearch(this.value)"
+            onfocus="rxInlineSearch(this.value)">
+          <button class="rx-blank-btn" onclick="addBlankMedicine()"
+            title="Add a blank row — type a one-off medicine for this patient only">＋ Blank</button>
+        </div>
       </td>
       <td></td>
     </tr>`;
@@ -915,6 +956,8 @@ function renderMedicineTable() {
 function renderRxMedChips() {
   const wrap = document.getElementById('rx-med-chips');
   if (!wrap) return;
+  const outer = wrap.closest('.rx-chips-wrap');
+  if (outer) outer.style.display = MEDICINE_DB.length ? '' : 'none';
   const added = new Set(State.medicines.map(m => String(m.med.id)));
   wrap.innerHTML = [...MEDICINE_DB]
     .sort((a, b) => (a.brand || '').localeCompare(b.brand || ''))
@@ -938,6 +981,7 @@ function toggleRxChip(dbIdx) {
 function updateMedName(idx, field, value) {
   if (!State.medicines[idx]) return;
   State.medicines[idx].med[field] = value;
+  scheduleAutoSave();
 }
 
 function updateMed(idx, field, value) {
@@ -953,14 +997,28 @@ function removeMed(idx) {
   scheduleAutoSave();
 }
 
-function editNotes(idx) {
-  const current = State.medicines[idx]?.notes || '';
-  const note = prompt('Medicine notes / instructions:', current);
-  if (note !== null) {
-    State.medicines[idx].notes = note;
-    renderMedicineTable();
-  }
+// Blank editable row for a one-off medicine — saved with this patient's visit
+// only, never added to the master medicine list.
+function addBlankMedicine() {
+  State.medicines.push({
+    med: { id: 'adhoc_' + Date.now(), brand: '', content: '', type: 'TAB', form: 'TAB' },
+    route: 'Oral',
+    frequency: 'Once a day',
+    schedule: '1-0-0 (Morning)',
+    dosage: '1',
+    instructions: 'After meals',
+    duration: '5 Days',
+    dose: '1', timings: '1-0-0', timingsNote: 'After Food', qty: ''
+  });
+  renderMedicineTable();
+  scheduleAutoSave();
+  // Focus the new row's name box so the doctor can type straight away
+  setTimeout(() => {
+    const names = document.querySelectorAll('#rx-table-body .rx-med-name');
+    names[names.length - 1]?.focus();
+  }, 50);
 }
+
 
 function addMedicine(med) {
   if (State.medicines.findIndex(m => String(m.med.id) === String(med.id)) >= 0) {
@@ -1457,14 +1515,6 @@ function renderMedBrowserList(query) {
 function handleMedSearch(query) {
   clearTimeout(State.medSearchTimeout);
   State.medSearchTimeout = setTimeout(() => renderMedBrowserList(query.trim()), query ? 80 : 0);
-}
-
-function medResultKey(event, dbIdx) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    const med = MEDICINE_DB[dbIdx];
-    if (med) addMedicine(med);
-    event.preventDefault();
-  }
 }
 
 // ─── Template State ────────────────────────────────────────────────────────────
@@ -2080,10 +2130,15 @@ function addTmplMed(medId) {
 }
 
 // ─── Save & Print ─────────────────────────────────────────────────────────────
+let _savingVisit = false;
 async function saveVisit() {
+  if (_pdfAllRunning) { toast('PDF backup running — please wait a moment…', 'warning'); return; }
   if (!State.currentPatient || !State.currentVisit) {
     toast('Please select a patient first', 'error'); return;
   }
+  if (_savingVisit) return;                          // guard against double-tap
+  _savingVisit = true;
+  setTimeout(() => { _savingVisit = false; }, 1200); // release even if a later step throws
 
   // Read all fields
   State.currentVisit.complaints    = document.getElementById('field-complaints').value;
@@ -2479,6 +2534,12 @@ function pvbToggle(tabEl, visitId) {
 }
 
 async function loadVisit(id) {
+  if (_pdfAllRunning) { toast('PDF backup running — please wait a moment…', 'warning'); return; }
+  // Flush pending edits of the visit being left before swapping
+  if (State.currentPatient && State.currentVisit) {
+    clearTimeout(_autoSaveTimer);
+    try { await _autoSaveNow(); } catch (e) { console.warn('Flush save on visit load failed', e); }
+  }
   const v = await DB.getVisit(id);
   if (!v) return;
   State.currentVisit = v;
@@ -2727,9 +2788,14 @@ function switchBackupTab(which) {
 }
 
 // "Backup Now" in the Google Drive section — full JSON of ALL patients to Drive
-function driveBackupNowClick() {
+async function driveBackupNowClick() {
   if (!GDrive.token) { toast('Connect Google Drive first', 'error'); return; }
   if (GDrive._backupInProgress) { toast('Drive backup already running…', 'warning'); return; }
+  // Include the open patient's very latest keystrokes
+  if (State.currentPatient && State.currentVisit) {
+    clearTimeout(_autoSaveTimer);
+    try { await _autoSaveNow(); } catch (e) {}
+  }
   toast('Backing up all patients to Google Drive…', 'success', 2500);
   GDrive._backupInProgress = true;
   gdriveBackupNow()
@@ -2741,13 +2807,16 @@ function driveBackupNowClick() {
 // "Backup Now" in the PDF folder section — regenerates prescription PDFs for
 // ALL patients' visits changed since the last run (not just the open patient).
 const PDF_ALL_KEY = 'pdf_backup_all_at';
-let _pdfAllRunning = false;
 
 async function backupAllPdfsNow() {
   if (_pdfAllRunning) { toast('PDF backup already running…', 'warning'); return; }
   if (!PdfStore.dirHandle && !GDrive.token) {
     toast('Select a folder or connect Drive first', 'error'); return;
   }
+  // Flush any pending edit of the open patient BEFORE raising the sweep flag
+  // and swapping State, so their unsaved changes are neither lost nor misfiled.
+  clearTimeout(_autoSaveTimer);
+  await _autoSaveNow();
   _pdfAllRunning = true;
   try {
     const since = parseInt(localStorage.getItem(PDF_ALL_KEY) || '0', 10);
@@ -2803,6 +2872,8 @@ async function backupAllPdfsNow() {
     toast(`✓ ${done} prescription PDF${done !== 1 ? 's' : ''} backed up${failed ? ` · ${failed} failed` : ''}`, failed ? 'warning' : 'success', 4500);
   } finally {
     _pdfAllRunning = false;
+    // Re-arm autosave: anything typed while the sweep suppressed it gets saved
+    if (State.currentPatient && State.currentVisit) scheduleAutoSave();
   }
 }
 function closeBackupModal() {
@@ -2810,6 +2881,11 @@ function closeBackupModal() {
 }
 
 async function exportBackup() {
+  // Include the open patient's very latest keystrokes in the export
+  if (State.currentPatient && State.currentVisit) {
+    clearTimeout(_autoSaveTimer);
+    try { await _autoSaveNow(); } catch (e) {}
+  }
   const [patients, templates] = await Promise.all([DB.getAllPatients(), DB.getAllTemplates()]);
   // Fetch all visits in parallel
   const visitArrays = await Promise.all(patients.map(p => DB.getPatientVisits(p.id)));
@@ -2893,6 +2969,14 @@ async function importBackup(input) {
 
   await initPatientPanel();
   await loadAndRenderTemplates();
+  // Reload the open patient so stale in-memory data can't overwrite the
+  // freshly imported records on the next autosave.
+  if (State.currentPatient) {
+    const openId = State.currentPatient.id;
+    clearTimeout(_autoSaveTimer);
+    State.currentPatient = null; State.currentVisit = null; State.medicines = [];
+    await loadPatient(openId);
+  }
   input.value = "";
   if (errors) {
     toast(`Restored with ${errors} error(s) — some records may be missing`, "warning");
@@ -3045,11 +3129,17 @@ async function gdriveBackupNow() {
 
 function gdriveStartAutoBackup() {
   clearInterval(GDrive.autoTimer);
+  let lastAutoBackup = 0;
   GDrive.autoTimer = setInterval(() => {
     // Silently refresh token 5 minutes before it expires (~55-min window)
     if (GDrive._tokenExpiry && Date.now() > GDrive._tokenExpiry - 5 * 60 * 1000) {
       gdriveAutoReconnect();
-    } else {
+      return;
+    }
+    // Full-DB upload every 10 minutes is plenty; every 60s would hammer
+    // Drive quota and re-serialize the whole database each minute.
+    if (Date.now() - lastAutoBackup >= 10 * 60 * 1000) {
+      lastAutoBackup = Date.now();
       gdriveBackupNow();
     }
   }, 60000);

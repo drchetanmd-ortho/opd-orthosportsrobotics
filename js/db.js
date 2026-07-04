@@ -172,13 +172,18 @@ const DB = {
       req.onerror = e => reject(e.target.error);
     });
     if (!entry) return;
-    await this.savePatient(entry.patient);
-    for (const v of entry.visits) await this.saveVisit(v);
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('recycle_bin', 'readwrite');
-      tx.objectStore('recycle_bin').delete(id);
+    // Single transaction across all 3 stores — atomic, like deletePatient
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(['recycle_bin', 'patients', 'visits'], 'readwrite');
       tx.oncomplete = () => resolve();
       tx.onerror = e => reject(e.target.error);
+      tx.onabort = e => reject(e.target.error);
+
+      tx.objectStore('patients').put(entry.patient);
+      for (const v of entry.visits) {
+        tx.objectStore('visits').put(v);
+      }
+      tx.objectStore('recycle_bin').delete(id);
     });
   },
 

@@ -403,6 +403,13 @@ textarea.form-field { min-height: 64px; }
 .rx-freq { width: 70px; }
 .rx-dur { width: 100px; }
 .rx-qty { width: 45px; }
+.rx-blank-btn {
+  flex-shrink: 0; padding: 5px 12px; border: 1.5px dashed var(--border2); border-radius: 14px;
+  background: none; color: var(--text2); font-size: 11.5px; font-weight: 600;
+  font-family: var(--font); cursor: pointer; transition: all .18s cubic-bezier(.4,0,.2,1);
+}
+.rx-blank-btn:hover { border-color: var(--blue); color: var(--blue-dark); background: var(--blue-light); }
+.rx-blank-btn:active { transform: scale(.95); }
 
 /* ── Pre-placed medicine boxes under the Rx table ────────────────────────── */
 .rx-chips-wrap { padding: 8px 10px 10px; border-top: 1px dashed var(--border2); }
