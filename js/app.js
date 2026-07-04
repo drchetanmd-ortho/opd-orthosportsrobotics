@@ -43,6 +43,76 @@ function saveMedList() {
   }
 }
 
+// Export the medicine master list to a downloadable JSON file
+function exportMedList() {
+  const data = {
+    type: 'ortho-opd-medicine-list', version: 1,
+    exportedAt: new Date().toISOString(),
+    count: MEDICINE_DB.length,
+    medicines: MEDICINE_DB
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'medicine-list-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast(`Medicine list exported (${MEDICINE_DB.length} medicines)`);
+}
+
+// Import a medicine list file — merges into the existing list (by id), skips duplicates
+async function importMedListFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (e) {
+    toast('Invalid file — not valid JSON', 'error');
+    input.value = '';
+    return;
+  }
+  // Accept either our export wrapper or a bare array of medicines
+  const incoming = Array.isArray(parsed) ? parsed
+    : (Array.isArray(parsed.medicines) ? parsed.medicines : null);
+  if (!incoming) {
+    toast('Unrecognised medicine list file', 'error');
+    input.value = '';
+    return;
+  }
+  const valid = incoming.filter(m => m && typeof m === 'object' && m.id != null && typeof m.brand === 'string');
+  if (!valid.length) {
+    toast('No valid medicines found in file', 'error');
+    input.value = '';
+    return;
+  }
+  if (!confirm(`Import ${valid.length} medicine(s)?\n\nThese will be merged into your list. Existing medicines with the same ID are kept as-is.`)) {
+    input.value = '';
+    return;
+  }
+  const have = new Set(MEDICINE_DB.map(m => String(m.id)));
+  let added = 0, skipped = 0;
+  valid.forEach(m => {
+    if (have.has(String(m.id))) { skipped++; return; }
+    MEDICINE_DB.push({
+      id: m.id, brand: m.brand, content: m.content || '',
+      type: m.type || 'TAB', form: m.form || m.type || 'TAB',
+      route: m.route || '', timings: m.timings || '1-0-0', timingsNote: m.timingsNote || 'After Food',
+      frequency: m.frequency || 'Once a day', duration: m.duration || '5 Days',
+      dose: m.dose || '1', qty: m.qty || '', indications: m.indications || []
+    });
+    have.add(String(m.id));
+    added++;
+  });
+  if (added) saveMedList();
+  refreshAlphaList();
+  input.value = '';
+  toast(`✓ Imported ${added} medicine${added !== 1 ? 's' : ''}${skipped ? ` · ${skipped} already present` : ''}`, 'success', 4000);
+}
+
 // One-time migration: fold any medicines from the old "favourites"/custom stores
 // into the master list, then clear those legacy stores. Runs harmlessly every load.
 function migrateLegacyMedStores() {

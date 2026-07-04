@@ -339,6 +339,11 @@ body { font-family: var(--font); font-size: 13.5px; color: var(--text); backgrou
   display: flex; align-items: center; gap: 6px; cursor: pointer;
 }
 .section-header:hover { background: var(--surface2); }
+.section-header::after {
+  content: '⌄'; margin-left: auto; font-size: 14px; line-height: 1;
+  color: var(--text3); transition: transform .2s ease;
+}
+.section-header.collapsed::after { transform: rotate(-90deg); }
 .section-content { padding: 12px 14px; }
 
 textarea.form-field, input.form-field, select.form-field {
@@ -482,6 +487,21 @@ textarea.form-field { min-height: 64px; }
 #med-alpha-section .rp-section-header { flex-wrap: nowrap; }
 
 .med-alpha-list { overflow-y: auto; max-height: 220px; }
+
+/* Medicine list export/import bar */
+.med-backup-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface2);
+}
+.med-backup-label { font-size: 10.5px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; }
+.med-backup-btns { display: flex; gap: 6px; }
+.med-backup-btn {
+  font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 6px;
+  border: 1px solid var(--border2); background: var(--surface); color: var(--text2);
+  cursor: pointer; transition: all .15s cubic-bezier(.4,0,.2,1); white-space: nowrap;
+}
+.med-backup-btn:hover { border-color: var(--blue); color: var(--blue-dark); background: var(--blue-light); }
+.med-backup-btn:active { transform: scale(.96); }
 .med-alpha-row {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 12px; border-bottom: 1px solid var(--border);

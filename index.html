@@ -141,7 +141,7 @@
 
         <!-- 0. Body Part Selector + Disease Templates -->
         <div class="form-section body-selector-section">
-          <div class="section-header" onclick="toggleSection(this)">
+          <div class="section-header collapsed" onclick="toggleSection(this)">
             <span>🦴</span> Body Part &amp; Templates
           </div>
           <div class="section-content" style="display:none;">
@@ -370,6 +370,16 @@
           <button class="btn-add-template" onclick="openAddMedModal()">＋ Add Medicine</button>
         </div>
         <div id="med-alpha-list" class="med-alpha-list"></div>
+        <div class="med-backup-bar">
+          <span class="med-backup-label">Medicine list backup</span>
+          <div class="med-backup-btns">
+            <button class="med-backup-btn" onclick="exportMedList()" title="Save your medicine list to a file">↓ Export</button>
+            <label class="med-backup-btn" title="Load a medicine list from a file">
+              ↑ Import
+              <input type="file" accept=".json" style="display:none" onchange="importMedListFile(this)">
+            </label>
+          </div>
+        </div>
       </div>
 
     </aside>
@@ -689,6 +699,7 @@ function toggleSection(header) {
   const content = header.nextElementSibling;
   const isHidden = content.style.display === 'none';
   content.style.display = isHidden ? '' : 'none';
+  header.classList.toggle('collapsed', !isHidden);
 }
 
 // Register service worker for offline support
