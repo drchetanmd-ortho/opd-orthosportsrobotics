@@ -483,15 +483,20 @@ textarea.form-field { min-height: 64px; }
   display: flex; align-items: center; justify-content: space-between;
 }
 
-/* Alpha medicine browser */
-#med-alpha-section .rp-section-header { flex-wrap: nowrap; }
+/* Alpha medicine browser — fills the remaining right-panel height */
+#med-alpha-section {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+  border-bottom: none;
+}
+#med-alpha-section .rp-section-header { flex-wrap: nowrap; flex-shrink: 0; }
 
-.med-alpha-list { overflow-y: auto; max-height: 220px; }
+.med-alpha-list { flex: 1; overflow-y: auto; min-height: 0; }
 
 /* Medicine list export/import bar */
 .med-backup-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface2);
+  flex-shrink: 0;
 }
 .med-backup-label { font-size: 10.5px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; }
 .med-backup-btns { display: flex; gap: 6px; }
@@ -570,7 +575,7 @@ textarea.form-field { min-height: 64px; }
   font-size: 12.5px; font-family: var(--font); color: var(--text);
   background: var(--surface2); transition: all .15s;
 }
-#med-search:focus { outline: none; border-color: var(--blue); background: #fff; box-shadow: 0 0 0 3px rgba(26,110,245,.12); }
+#med-search:focus { outline: none; border-color: var(--blue); background: #fff; box-shadow: 0 0 0 3px rgba(42,171,154,.15); }
 .med-search-hint { font-size: 10.5px; color: var(--text3); margin-top: 4px; }
 
 #med-results { overflow-y: auto; max-height: 320px; border-bottom: 1px solid var(--border); }
@@ -903,7 +908,7 @@ input.modal-input:focus, select.modal-input:focus {
   }
   .mob-nav-btn span:first-child { font-size: 18px; line-height: 1; }
   .mob-nav-btn.active { color: var(--blue); }
-  .mob-nav-btn.active span:first-child { filter: drop-shadow(0 0 4px rgba(26,110,245,.4)); }
+  .mob-nav-btn.active span:first-child { filter: drop-shadow(0 0 4px rgba(42,171,154,.45)); }
 
   /* Center panel mobile tweaks */
   .patient-header { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }

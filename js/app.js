@@ -819,12 +819,12 @@ function updateVisitField(field, value) {
 
 let _autoSaveTimer = null;
 let _pdfAllRunning = false;   // true while the all-patients PDF sweep has State swapped
-// Persist the on-screen form + medicines into the current visit immediately.
-async function _autoSaveNow() {
-  // While the all-patients PDF sweep has State swapped, the on-screen form
-  // belongs to a different patient — never mix the two.
-  if (_pdfAllRunning) return;
-  if (!State.currentPatient || !State.currentVisit) return;
+
+// Single source of truth: read the on-screen consultation form + medicine table
+// into State.currentVisit (in-memory only, no DB write). Used by every save path
+// so the serialized shape can never drift between them.
+function _collectVisitFromForm() {
+  if (!State.currentPatient || !State.currentVisit) return false;
   const fields = ['complaints','hopi','past-history','allergies','examination',
     'investigations','diagnosis','icd10','advice','follow-up','referred-to','procedure','notes'];
   fields.forEach(f => {
@@ -845,6 +845,15 @@ async function _autoSaveNow() {
     frequency: m.frequency, duration: m.duration, qty: m.qty,
     details: m.details || '', notes: m.notes || ''
   }));
+  return true;
+}
+
+// Persist the on-screen form + medicines into the current visit immediately.
+async function _autoSaveNow() {
+  // While the all-patients PDF sweep has State swapped, the on-screen form
+  // belongs to a different patient — never mix the two.
+  if (_pdfAllRunning) return;
+  if (!_collectVisitFromForm()) return;
   await DB.saveVisit(State.currentVisit);
 }
 
@@ -1962,7 +1971,7 @@ function printInvoice() {
   .inv-header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
   .clinic-name { font-size: 20px; font-weight: 900; }
   .clinic-sub { font-size: 10px; color: #444; margin-top: 3px; }
-  .inv-label { font-size: 18px; font-weight: 700; color: #1a6ef5; text-align:right; }
+  .inv-label { font-size: 18px; font-weight: 700; color: #0d2136; text-align:right; }
   .inv-no { font-size: 10px; color: #666; text-align:right; margin-top:2px; }
   .patient-section { display:flex; justify-content:space-between; margin-bottom:14px; }
   .info-block p { font-size: 11px; line-height: 1.7; }
@@ -2180,33 +2189,11 @@ async function saveVisit() {
   }
   if (_savingVisit) return;                          // guard against double-tap
   _savingVisit = true;
+  clearTimeout(_autoSaveTimer);                      // cancel any pending debounced save
   setTimeout(() => { _savingVisit = false; }, 1200); // release even if a later step throws
 
-  // Read all fields
-  State.currentVisit.complaints    = document.getElementById('field-complaints').value;
-  State.currentVisit.hopi          = document.getElementById('field-hopi').value;
-  State.currentVisit.pastHistory   = document.getElementById('field-past-history').value;
-  State.currentVisit.allergies     = document.getElementById('field-allergies').value;
-  State.currentVisit.examination   = document.getElementById('field-examination').value;
-  State.currentVisit.investigations= document.getElementById('field-investigations').value;
-  State.currentVisit.diagnosis     = document.getElementById('field-diagnosis').value;
-  State.currentVisit.icd10         = document.getElementById('field-icd10').value;
-  State.currentVisit.advice        = document.getElementById('field-advice').value;
-  State.currentVisit.followUp      = document.getElementById('field-follow-up').value;
-  State.currentVisit.referredTo    = document.getElementById('field-referred-to').value;
-  State.currentVisit.procedure     = document.getElementById('field-procedure').value;
-  State.currentVisit.notes         = document.getElementById('field-notes').value;
-  State.currentVisit.medicines = State.medicines.map(m => ({
-    id: m.med.id, brand: m.med.brand, content: m.med.content,
-    type: m.med.type, form: m.med.form,
-    route: m.route || routeFromType(m.med.type),
-    schedule: m.schedule || schedFromTimings(m.timings),
-    dosage: m.dosage || m.dose || '1',
-    instructions: m.instructions || normInstr(m.timingsNote),
-    dose: m.dose, timings: m.timings, timingsNote: m.timingsNote,
-    frequency: m.frequency, duration: m.duration, qty: m.qty,
-    details: m.details || '', notes: m.notes || ''
-  }));
+  // Collect the form + medicines via the shared serializer (single source of truth)
+  _collectVisitFromForm();
   State.currentVisit.saved = true;
   State.currentVisit.savedAt = Date.now();
 
@@ -2783,6 +2770,13 @@ async function init() {
   if (localStorage.getItem('gdrive_connected') === '1' && localStorage.getItem('gdrive_client_id')) {
     gdriveAutoReconnect();
   }
+
+  // PWA "New Patient" app shortcut → open the registration modal on launch
+  try {
+    if (new URLSearchParams(location.search).get('action') === 'new-patient') {
+      openNewPatientModal();
+    }
+  } catch (e) {}
 }
 
 function gdriveAutoReconnect() {
@@ -3343,7 +3337,7 @@ body { font-family:Arial,sans-serif;font-size:12px;color:#000;background:#fff; }
 .inv-header { display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px; }
 .clinic-name { font-size:18px;font-weight:900; }
 .clinic-sub { font-size:10px;color:#444;margin-top:3px; }
-.inv-label { font-size:18px;font-weight:700;color:#1a6ef5;text-align:right; }
+.inv-label { font-size:18px;font-weight:700;color:#0d2136;text-align:right; }
 .inv-no { font-size:10px;color:#666;text-align:right;margin-top:2px; }
 .patient-section { display:flex;justify-content:space-between;margin-bottom:14px; }
 .info-block p { font-size:11px;line-height:1.7; }
