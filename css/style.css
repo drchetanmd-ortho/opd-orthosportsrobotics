@@ -411,35 +411,6 @@ textarea.form-field { min-height: 64px; }
 .rx-blank-btn:hover { border-color: var(--blue); color: var(--blue-dark); background: var(--blue-light); }
 .rx-blank-btn:active { transform: scale(.95); }
 
-/* ── Pre-placed medicine boxes under the Rx table ────────────────────────── */
-.rx-chips-wrap { padding: 8px 10px 10px; border-top: 1px dashed var(--border2); }
-.rx-chips-label {
-  font-size: 10px; font-weight: 700; color: var(--text3);
-  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px;
-}
-.rx-chips {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  max-height: 132px; overflow-y: auto;
-}
-.rx-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border: 1.5px solid var(--border2); border-radius: 16px;
-  background: var(--surface); color: var(--text2);
-  font-size: 11.5px; font-weight: 600; font-family: var(--font); cursor: pointer;
-  transition: all .18s cubic-bezier(.4,0,.2,1);
-}
-.rx-chip:hover {
-  border-color: var(--blue); color: var(--blue-dark); background: var(--blue-light);
-  transform: translateY(-1px); box-shadow: 0 2px 8px rgba(42,171,154,.2);
-}
-.rx-chip:active { transform: scale(.95); }
-.rx-chip-on {
-  background: var(--blue); border-color: var(--blue); color: #fff;
-}
-.rx-chip-on:hover { background: var(--blue-dark); border-color: var(--blue-dark); color: #fff; }
-.rx-chip-type {
-  font-size: 8.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px; line-height: 1.3;
-}
 .rx-dosage { width: 45px; text-align: center; }
 .rx-dur-cell { white-space: nowrap; }
 .rx-dur-num { width: 48px; display: inline-block; text-align: center; }
@@ -614,6 +585,23 @@ mark { background: #fff9c4; border-radius: 2px; padding: 0 1px; }
 .btn-add-template:hover { background: var(--blue); color: #fff; }
 
 .tmpl-list { display: flex; flex-direction: column; }
+
+/* Disease templates inside the central "Body Part & Templates" section */
+.tmpl-center { margin-top: 12px; border-top: 1px dashed var(--border2); padding-top: 10px; }
+.tmpl-center-header {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10.5px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px;
+}
+.tmpl-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 10px;
+}
+.tmpl-grid .tmpl-list-row {
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface2);
+}
+.tmpl-grid .tmpl-list-row:hover { background: var(--blue-light); border-color: var(--blue); }
 .tmpl-list-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 7px 12px; border-bottom: 1px solid var(--border);
@@ -910,8 +898,6 @@ input.modal-input:focus, select.modal-input:focus {
   /* Rx table: horizontal scroll */
   .rx-section { overflow-x: auto; }
   .rx-table { min-width: 950px; }
-  /* Keep the medicine boxes on-screen while the table scrolls sideways */
-  .rx-chips-wrap { position: sticky; left: 0; max-width: 100vw; }
 
   /* Right panel full height */
   #right-panel { flex-direction: column; }

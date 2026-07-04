@@ -79,7 +79,6 @@
           <div class="left-tabs">
             <div class="left-tab active" data-tab="today" onclick="switchLeftTab('today')">Today</div>
             <div class="left-tab" data-tab="recent" onclick="switchLeftTab('recent')">Recent</div>
-            <div class="left-tab" data-tab="followup" onclick="switchLeftTab('followup')">Follow-up</div>
           </div>
         </div>
 
@@ -91,14 +90,6 @@
         <!-- Recent -->
         <div id="ltab-recent" class="left-tab-panel">
           <div id="patient-list-recent"></div>
-        </div>
-
-        <!-- Follow-up (placeholder) -->
-        <div id="ltab-followup" class="left-tab-panel">
-          <div class="empty-state">
-            <span class="empty-icon">📅</span>
-            <p>Follow-up scheduling coming soon</p>
-          </div>
         </div>
       </div>
 
@@ -148,12 +139,21 @@
       <!-- Consultation Form (hidden until patient selected) -->
       <div id="consultation-form" style="display:none;" class="consultation-body">
 
-        <!-- 0. Body Part Selector -->
+        <!-- 0. Body Part Selector + Disease Templates -->
         <div class="form-section body-selector-section">
           <div class="section-header" onclick="toggleSection(this)">
             <span>🦴</span> Body Part &amp; Templates
           </div>
-          <div class="section-content" id="body-selector-wrap"></div>
+          <div class="section-content">
+            <div id="body-selector-wrap"></div>
+            <div class="tmpl-center">
+              <div class="tmpl-center-header">
+                <span>Disease Templates — tap to apply</span>
+                <button class="btn-add-template" onclick="openTemplateModal(null)">＋ New</button>
+              </div>
+              <div id="templates-chips" class="tmpl-list tmpl-grid"></div>
+            </div>
+          </div>
         </div>
 
         <!-- 1. Chief Complaint -->
@@ -266,10 +266,6 @@
               </tr>
             </tbody>
           </table>
-          <div class="rx-chips-wrap">
-            <div class="rx-chips-label">Medicine list — tap to add / remove:</div>
-            <div id="rx-med-chips" class="rx-chips"></div>
-          </div>
         </div>
 
         <!-- 9. Advice -->
@@ -375,18 +371,6 @@
         </div>
         <div id="med-alpha-list" class="med-alpha-list"></div>
       </div>
-
-      <!-- Condition Templates -->
-      <div class="right-section">
-        <div class="rp-section-header">
-          <span>Templates</span>
-          <button class="btn-add-template" onclick="openTemplateModal(null)">＋ New</button>
-        </div>
-        <div id="templates-chips" class="tmpl-list">
-          <!-- Rendered by JS -->
-        </div>
-      </div>
-
 
     </aside>
   </main>

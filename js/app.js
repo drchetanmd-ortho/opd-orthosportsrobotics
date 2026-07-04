@@ -948,34 +948,6 @@ function renderMedicineTable() {
   // Keep the right-panel medicine browser's ✓ marks in sync with the current
   // prescription — covers patient switches, visit loads, template applies, etc.
   if (typeof refreshAlphaList === 'function') refreshAlphaList();
-  renderRxMedChips();
-}
-
-// Pre-placed medicine boxes below the Rx table — one per medicine in the
-// master list. Tap to add to the prescription; tap again to remove.
-function renderRxMedChips() {
-  const wrap = document.getElementById('rx-med-chips');
-  if (!wrap) return;
-  const outer = wrap.closest('.rx-chips-wrap');
-  if (outer) outer.style.display = MEDICINE_DB.length ? '' : 'none';
-  const added = new Set(State.medicines.map(m => String(m.med.id)));
-  wrap.innerHTML = [...MEDICINE_DB]
-    .sort((a, b) => (a.brand || '').localeCompare(b.brand || ''))
-    .map(m => {
-      const idx = MEDICINE_DB.indexOf(m);
-      const on = added.has(String(m.id));
-      return `<button class="rx-chip${on ? ' rx-chip-on' : ''}" onclick="toggleRxChip(${idx})" title="${esc(m.content || '')}">
-        <span class="rx-chip-type" style="${typeBadgeStyle(m.type)}">${esc(m.type)}</span>${esc(m.brand)}${on ? ' ✓' : ''}
-      </button>`;
-    }).join('');
-}
-
-function toggleRxChip(dbIdx) {
-  const med = MEDICINE_DB[dbIdx];
-  if (!med) return;
-  const i = State.medicines.findIndex(m => String(m.med.id) === String(med.id));
-  if (i >= 0) removeMed(i);
-  else addMedicine(med);
 }
 
 function updateMedName(idx, field, value) {
