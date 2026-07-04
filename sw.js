@@ -1,18 +1,10 @@
-const CACHE = 'sportsmед-opd-v1';
-const ASSETS = [
-  './index.html',
-  './css/style.css',
-  './js/app.js',
-  './js/db.js',
-  './js/medicines.js',
-  './js/templates.js',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
-];
+// Network-first service worker — always serves the latest deployed files when
+// online; the cache is only a fallback for offline use. Bump CACHE on breaking
+// changes to purge old caches.
+const CACHE = 'sportsmed-opd-v2';
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
-  );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
@@ -24,7 +16,17 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => cached))
+    fetch(e.request)
+      .then(resp => {
+        // Cache a copy of successful same-app responses for offline fallback
+        if (resp && resp.ok) {
+          const copy = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return resp;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
