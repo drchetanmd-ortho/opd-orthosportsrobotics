@@ -29,7 +29,7 @@ html, body { height: 100%; overflow: hidden; }
 body { font-family: var(--font); font-size: 13.5px; color: var(--text); background: var(--bg); }
 
 /* ─── Layout ─────────────────────────────────────────────────────────────── */
-#app { display: grid; grid-template-rows: 68px 1fr; height: 100vh; }
+#app { display: grid; grid-template-rows: 68px 1fr; height: 100vh; height: 100dvh; }
 
 /* ─── Top Bar ────────────────────────────────────────────────────────────── */
 #topbar {
@@ -171,6 +171,7 @@ body { font-family: var(--font); font-size: 13.5px; color: var(--text); backgrou
   background: var(--surface);
   overflow-y: auto;
   height: calc(100vh - 68px);
+  height: calc(100dvh - 68px);
 }
 .panel + .panel { border-left: 1px solid var(--border); }
 
@@ -877,7 +878,8 @@ input.modal-input:focus, select.modal-input:focus {
   /* 3-panel → single full panel */
   #main {
     display: block !important;
-    height: calc(100vh - 68px - 56px); /* topbar (68px grid row) + mobile nav (56px) */
+    height: calc(100vh - 68px - 56px);  /* fallback */
+    height: calc(100dvh - 68px - 56px); /* topbar (68px) + mobile nav (56px), visible viewport */
     overflow: hidden;
     position: relative;
   }
@@ -933,7 +935,7 @@ input.modal-input:focus, select.modal-input:focus {
   #left-panel { flex-direction: column; }
 
   /* New patient modal full screen */
-  .modal { max-width: 100% !important; width: 100%; margin: 0; border-radius: 0; min-height: 100vh; }
+  .modal { max-width: 100% !important; width: 100%; margin: 0; border-radius: 0; min-height: 100vh; min-height: 100dvh; }
   .modal-overlay { align-items: flex-start; }
 
   /* Patient items larger touch targets */
