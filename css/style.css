@@ -877,7 +877,7 @@ input.modal-input:focus, select.modal-input:focus {
   /* 3-panel → single full panel */
   #main {
     display: block !important;
-    height: calc(100vh - 50px - 56px); /* topbar + mobile nav */
+    height: calc(100vh - 68px - 56px); /* topbar (68px grid row) + mobile nav (56px) */
     overflow: hidden;
     position: relative;
   }
