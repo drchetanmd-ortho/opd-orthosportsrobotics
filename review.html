@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0d2136">
+<title>How was your experience? · Dr Chetan M Dojode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0d2136; --teal:#2aab9a; --teal-dark:#1d8a7a;
+    --bg:#f0f5f5; --surface:#fff; --text:#0d2136; --text2:#3a5a6a; --border:#d0e8e5;
+    --star:#fbbc04;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .card{
+    background:var(--surface); width:100%; max-width:420px; border-radius:18px;
+    box-shadow:0 12px 40px rgba(13,33,54,.18); overflow:hidden;
+  }
+  .head{ background:var(--navy); color:#fff; padding:26px 22px 22px; text-align:center; }
+  .head .logo{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:52px; height:52px; border-radius:12px; background:var(--teal);
+    font-size:22px; font-weight:800; margin-bottom:12px;
+  }
+  .head h1{ font-size:18px; font-weight:700; }
+  .head .clinic{ font-size:13px; opacity:.8; margin-top:4px; }
+  .body{ padding:26px 22px 30px; text-align:center; }
+  .body h2{ font-size:16px; font-weight:600; margin-bottom:4px; }
+  .body p.sub{ font-size:13px; color:var(--text2); margin-bottom:20px; }
+  .stars{ display:flex; justify-content:center; gap:6px; margin-bottom:22px; }
+  .star{
+    font-size:40px; cursor:pointer; color:#d9e2e0; line-height:1;
+    transition:transform .12s, color .12s; user-select:none;
+  }
+  .star:hover{ transform:scale(1.12); }
+  .star.on{ color:var(--star); }
+  .step-feedback{ display:none; text-align:left; }
+  .step-feedback textarea{
+    width:100%; min-height:110px; border:1px solid var(--border); border-radius:12px;
+    padding:12px 14px; font-family:inherit; font-size:14px; resize:vertical; color:var(--text);
+  }
+  .step-feedback textarea:focus{ outline:none; border-color:var(--teal); }
+  .btn{
+    display:inline-block; width:100%; margin-top:16px; padding:14px;
+    border:none; border-radius:12px; font-family:inherit; font-size:15px; font-weight:700;
+    cursor:pointer; transition:opacity .15s; text-decoration:none; text-align:center;
+  }
+  .btn:hover{ opacity:.9; }
+  .btn-teal{ background:var(--teal); color:#fff; }
+  .thanks{ display:none; text-align:center; }
+  .thanks .big{ font-size:44px; margin-bottom:10px; }
+  .thanks h2{ font-size:17px; margin-bottom:6px; }
+  .thanks p{ font-size:13.5px; color:var(--text2); }
+  .foot{ padding:14px; text-align:center; font-size:11px; color:var(--text2); border-top:1px solid var(--border); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <div class="logo">OSR</div>
+      <h1>Dr Chetan M Dojode</h1>
+      <div class="clinic" id="clinic-name">OrthoSportsRobotics</div>
+    </div>
+
+    <div class="body">
+      <!-- Step 1: rating -->
+      <div class="step-rate" id="step-rate">
+        <h2>How was your experience?</h2>
+        <p class="sub">Tap a star to rate your visit</p>
+        <div class="stars" id="stars">
+          <span class="star" data-v="1">★</span>
+          <span class="star" data-v="2">★</span>
+          <span class="star" data-v="3">★</span>
+          <span class="star" data-v="4">★</span>
+          <span class="star" data-v="5">★</span>
+        </div>
+      </div>
+
+      <!-- Step 2: private feedback (ratings under 5) -->
+      <div class="step-feedback" id="step-feedback">
+        <h2 style="text-align:center;">Thank you for your feedback</h2>
+        <p class="sub" style="text-align:center;">We're sorry it wasn't a 5-star visit. Please tell us how we can do better — this goes privately to the clinic.</p>
+        <textarea id="fb-text" placeholder="Your feedback (optional)…"></textarea>
+        <button class="btn btn-teal" id="fb-send">Send feedback to clinic</button>
+      </div>
+
+      <!-- Step 3: thank you -->
+      <div class="thanks" id="step-thanks">
+        <div class="big">🙏</div>
+        <h2>Thank you!</h2>
+        <p id="thanks-msg">Your feedback has been received.</p>
+      </div>
+    </div>
+
+    <div class="foot">Your feedback helps us serve you better.</div>
+  </div>
+
+<script>
+  // ── Clinic profiles (short code → Google review link) ─────────────────────
+  var PROFILES = {
+    aarna:  { name:"Aarna Orthopaedic Clinic",  url:"https://g.page/r/CbG5qO3MCVHOEAE/review" },
+    sparsh: { name:"SPARSH Hospital Yelahanka", url:"https://g.page/r/CSV6MSTxo0qDEAE/review" }
+  };
+  // Clinic WhatsApp number that receives private (low-rating) feedback:
+  var CLINIC_WHATSAPP = "919480909009";
+
+  var params  = new URLSearchParams(location.search);
+  var code    = (params.get('c') || 'aarna').toLowerCase();
+  var profile = PROFILES[code] || PROFILES.aarna;
+  document.getElementById('clinic-name').textContent = profile.name;
+
+  var stars = document.querySelectorAll('.star');
+  function paint(n){ stars.forEach(function(s){ s.classList.toggle('on', +s.dataset.v <= n); }); }
+
+  stars.forEach(function(s){
+    s.addEventListener('mouseenter', function(){ paint(+s.dataset.v); });
+    s.addEventListener('click', function(){ handleRating(+s.dataset.v); });
+  });
+  document.getElementById('stars').addEventListener('mouseleave', function(){ paint(0); });
+
+  function handleRating(v){
+    paint(v);
+    if (v >= 5){
+      // 5 stars → straight to Google review
+      document.getElementById('step-rate').style.display = 'none';
+      document.getElementById('step-thanks').style.display = 'block';
+      document.getElementById('thanks-msg').textContent = 'Opening Google to post your review…';
+      setTimeout(function(){ location.href = profile.url; }, 900);
+    } else {
+      // Under 5 → private feedback, NOT sent to Google
+      document.getElementById('step-rate').style.display = 'none';
+      document.getElementById('step-feedback').style.display = 'block';
+      window._rating = v;
+    }
+  }
+
+  document.getElementById('fb-send').addEventListener('click', function(){
+    var txt = document.getElementById('fb-text').value.trim();
+    var msg = 'Patient feedback for ' + profile.name + '\n'
+            + 'Rating: ' + (window._rating || '') + '/5\n'
+            + (txt ? ('Comments: ' + txt) : 'No comments added.');
+    window.open('https://wa.me/' + CLINIC_WHATSAPP + '?text=' + encodeURIComponent(msg), '_blank');
+    document.getElementById('step-feedback').style.display = 'none';
+    document.getElementById('step-thanks').style.display = 'block';
+    document.getElementById('thanks-msg').textContent = 'Thank you — your feedback has been shared with the clinic.';
+  });
+</script>
+</body>
+</html>
