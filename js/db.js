@@ -274,5 +274,25 @@ const DB = {
       req.onsuccess = e => resolve(e.target.result);
       req.onerror = e => reject(e.target.error);
     });
+  },
+
+  // ── Durable key-value (meta) store — used to mirror the medicine list so it
+  //    survives localStorage eviction ──────────────────────────────────────────
+  async setMeta(key, value) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('meta', 'readwrite');
+      const req = tx.objectStore('meta').put({ key, value });
+      req.onsuccess = () => resolve();
+      req.onerror = e => reject(e.target.error);
+    });
+  },
+
+  async getMeta(key) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('meta', 'readonly');
+      const req = tx.objectStore('meta').get(key);
+      req.onsuccess = e => resolve(e.target.result ? e.target.result.value : undefined);
+      req.onerror = e => reject(e.target.error);
+    });
   }
 };

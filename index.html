@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260705e">
+<link rel="stylesheet" href="css/style.css?v=20260706b">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -137,6 +137,11 @@
           </div>
           <button id="btn-edit-patient" onclick="openEditPatientModal()" title="Edit patient details"
             style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:3px 7px;font-size:13px;cursor:pointer;color:var(--text2);">✏️</button>
+          <label id="rx-datetime-wrap" title="Prescription date & time — edit to backdate/correct"
+            style="display:none;align-items:center;gap:4px;font-size:11px;color:var(--text3);">
+            📅 <input id="rx-datetime" type="datetime-local" onchange="setVisitDateTime(this.value)"
+              style="font-size:12px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;color:var(--text2);font-family:var(--font);">
+          </label>
         </div>
         <div class="header-actions">
           <button class="action-btn btn-save" onclick="saveVisit()">💾 Save</button>
@@ -706,10 +711,10 @@
 <div id="toast-container"></div>
 
 <!-- Scripts (order matters) -->
-<script src="js/medicines.js?v=20260705e"></script>
-<script src="js/templates.js?v=20260705e"></script>
-<script src="js/db.js?v=20260705e"></script>
-<script src="js/app.js?v=20260705e"></script>
+<script src="js/medicines.js?v=20260706b"></script>
+<script src="js/templates.js?v=20260706b"></script>
+<script src="js/db.js?v=20260706b"></script>
+<script src="js/app.js?v=20260706b"></script>
 
 <script>
 function toggleSection(header) {
@@ -1024,8 +1029,8 @@ GutGermina cap - Saccharomyces boulardii 250 mg</pre>
   </div>
 </div>
 
-<script src="js/ortho-data.js?v=20260705e"></script>
-<script src="js/body-selector.js?v=20260705e"></script>
-<script src="js/outcome-scores.js?v=20260705e"></script>
+<script src="js/ortho-data.js?v=20260706b"></script>
+<script src="js/body-selector.js?v=20260706b"></script>
+<script src="js/outcome-scores.js?v=20260706b"></script>
 </body>
 </html>

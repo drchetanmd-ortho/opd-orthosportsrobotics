@@ -33,13 +33,54 @@ let MEDICINE_DB = (function loadMedList() {
 })();
 
 function saveMedList() {
+  let ok = false;
   try {
     localStorage.setItem(MEDS_KEY, JSON.stringify(MEDICINE_DB));
-    return true;
+    ok = true;
   } catch (e) {
-    console.error('Failed to save medicine list', e);
+    console.error('Failed to save medicine list to localStorage', e);
     if (typeof toast === 'function') toast('Could not save medicine list — device storage may be full', 'error', 4000);
-    return false;
+  }
+  // Durable mirror in IndexedDB (survives localStorage eviction — the main cause
+  // of medicines "disappearing"). Fire-and-forget; safe before DB.init too.
+  try { if (typeof DB === 'object' && DB.setMeta) DB.setMeta(MEDS_KEY, MEDICINE_DB).catch(() => {}); } catch (e) {}
+  // Tell other open tabs to reload so a stale tab can't overwrite this list.
+  try { if (window._medBC) window._medBC.postMessage('med-updated'); } catch (e) {}
+  return ok;
+}
+
+// Union two medicine lists by id — never drops a medicine from either source.
+function _mergeMedLists(a, b) {
+  const byId = new Map();
+  (a || []).forEach(m => { if (m && m.id != null) byId.set(String(m.id), m); });
+  (b || []).forEach(m => { if (m && m.id != null && !byId.has(String(m.id))) byId.set(String(m.id), m); });
+  return [...byId.values()];
+}
+
+// On startup, reconcile the localStorage list with the durable IndexedDB mirror.
+// If localStorage was evicted (re-seeded to samples), this recovers the real
+// list from IndexedDB. Union means neither store can silently drop a medicine.
+async function reconcileMedList() {
+  try {
+    const mirror = await DB.getMeta(MEDS_KEY);
+    if (Array.isArray(mirror) && mirror.length) {
+      const merged = _mergeMedLists(MEDICINE_DB, mirror);
+      if (merged.length !== MEDICINE_DB.length) {
+        const recovered = merged.length - MEDICINE_DB.length;
+        MEDICINE_DB = merged;
+        saveMedList();
+        if (typeof refreshAlphaList === 'function') refreshAlphaList();
+        console.info('Medicine list reconciled — recovered ' + recovered + ' medicine(s) from durable backup');
+        if (recovered > 0 && typeof toast === 'function') {
+          toast('Recovered ' + recovered + ' medicine(s) from backup ✓', 'success', 3500);
+        }
+      }
+    } else {
+      // No durable mirror yet on this device — create it from the current list.
+      await DB.setMeta(MEDS_KEY, MEDICINE_DB);
+    }
+  } catch (e) {
+    console.warn('Medicine list reconcile skipped', e);
   }
 }
 
@@ -438,6 +479,7 @@ async function deletePatient(id, name) {
     State.medicines = [];
     renderConsultationForm();
     renderMedicineTable();
+    refreshRxDateTimeInput();
     document.getElementById('prev-visits-section').style.display = 'none';
   }
   await initPatientPanel();
@@ -801,6 +843,42 @@ function updatePatientHeader() {
   // Show edit button
   const editBtn = document.getElementById('btn-edit-patient');
   if (editBtn) editBtn.style.display = '';
+  // Show + populate the editable prescription date/time
+  refreshRxDateTimeInput();
+}
+
+// Format a timestamp for an <input type="datetime-local"> (local time, no TZ shift)
+function _toDatetimeLocal(ts) {
+  const d = new Date(ts || Date.now());
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function refreshRxDateTimeInput() {
+  const wrap = document.getElementById('rx-datetime-wrap');
+  const input = document.getElementById('rx-datetime');
+  if (!wrap || !input) return;
+  if (State.currentVisit) {
+    input.value = _toDatetimeLocal(State.currentVisit.date || Date.now());
+    wrap.style.display = 'inline-flex';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+// Edit the prescription date/time — updates the visit's date (used on the
+// printed Rx, calendar, and sorting). Blank input is ignored.
+function setVisitDateTime(value) {
+  if (!State.currentVisit || !value) { refreshRxDateTimeInput(); return; }
+  const ts = new Date(value).getTime();
+  if (isNaN(ts)) { refreshRxDateTimeInput(); return; }
+  State.currentVisit.date = ts;
+  scheduleAutoSave();
+  toast('Prescription date set to ' + new Date(ts).toLocaleString('en-IN'), 'success', 2500);
+  // Reflect on the calendar if it's open
+  if (document.getElementById('calendar-panel')?.style.display === 'block') {
+    loadCalendarData().then(() => renderCalendarGrid());
+  }
 }
 
 async function startNewVisit(patient) {
@@ -1776,6 +1854,56 @@ function bindMedRowLongPress() {
   });
 }
 
+// Reveal a patient row's delete ✕ only after a long/hard press — prevents
+// accidental soft-deletes (the #1 cause of patients "disappearing" into the bin).
+function bindPatientRowLongPress() {
+  const root = document.getElementById('left-panel');
+  if (!root || root._delBound) return;
+  root._delBound = true;
+
+  let timer = null, sx = 0, sy = 0, suppressClick = false;
+  const clearTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  const disarm = () => root.querySelectorAll('.patient-item.del-armed')
+    .forEach(r => r.classList.remove('del-armed'));
+
+  // Swallow the click that fires when releasing a long-press (so it doesn't
+  // also open the patient).
+  root.addEventListener('click', e => {
+    if (suppressClick && !e.target.closest('.patient-del-btn')) {
+      e.preventDefault(); e.stopPropagation(); suppressClick = false;
+    }
+  }, true);
+
+  root.addEventListener('pointerdown', e => {
+    suppressClick = false;
+    if (e.target.closest('.patient-del-btn')) return;   // pressing ✕ itself
+    const row = e.target.closest('.patient-item');
+    if (!row) return;
+    sx = e.clientX; sy = e.clientY;
+    clearTimer();
+    timer = setTimeout(() => {
+      disarm();
+      row.classList.add('del-armed');
+      suppressClick = true;
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 550);
+  });
+  root.addEventListener('pointermove', e => {
+    if (timer && (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10)) clearTimer();
+  }, { passive: true });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+    root.addEventListener(ev, clearTimer, { passive: true }));
+  root.addEventListener('scroll', clearTimer, { passive: true, capture: true });
+
+  root.addEventListener('contextmenu', e => {
+    const row = e.target.closest('.patient-item');
+    if (row) { e.preventDefault(); disarm(); row.classList.add('del-armed'); }
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.patient-item.del-armed') && !e.target.closest('.patient-del-btn')) disarm();
+  });
+}
+
 function refreshAlphaList() {
   const q = document.getElementById('med-search')?.value || '';
   renderMedBrowserList(q);
@@ -2577,7 +2705,7 @@ async function printPrescription() {
   const p = State.currentPatient;
   const v = State.currentVisit;
   const age = p.age || calcAge(p.dob) || '?';
-  const now = new Date();
+  const now = new Date(v.date || Date.now());   // prescription date/time (editable)
 
   const medRows = State.medicines.map((item, i) => {
     const m = item.med;
@@ -2980,7 +3108,29 @@ async function init() {
   initMedAlphaBrowser();
 
   await DB.init();
+
+  // Ask the browser to keep our storage (prevents the eviction that wipes the
+  // medicine list). Best-effort — supported browsers grant it for installed PWAs.
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+
+  // Recover the medicine list from the durable IndexedDB mirror if localStorage
+  // was evicted/re-seeded, then keep tabs in sync so none can overwrite it.
+  await reconcileMedList();
+  try {
+    window._medBC = new BroadcastChannel('aarna-opd-med');
+    window._medBC.onmessage = (ev) => {
+      if (ev.data === 'med-updated') {
+        try {
+          const raw = localStorage.getItem(MEDS_KEY);
+          if (raw) { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) MEDICINE_DB = parsed; }
+        } catch (e) {}
+        if (typeof refreshAlphaList === 'function') refreshAlphaList();
+      }
+    };
+  } catch (e) { /* BroadcastChannel unsupported */ }
+
   await initPatientPanel();
+  bindPatientRowLongPress();
   await refreshRecycleBin();
 
   // Phase 1 – Ortho upgrades
@@ -3029,10 +3179,27 @@ async function init() {
   // Default to Today tab
   switchLeftTab('today');
 
-  // Auto-reconnect Google Drive silently if previously connected
+  // Auto-reconnect Google Drive silently if previously connected, then verify
+  // backup health (warns loudly if backups have silently stopped).
   if (localStorage.getItem('gdrive_connected') === '1' && localStorage.getItem('gdrive_client_id')) {
     gdriveAutoReconnect();
   }
+  // Give the silent reconnect ~4s to complete, then check whether backups are healthy
+  setTimeout(checkBackupHealth, 4000);
+
+  // Multi-tab guard: two tabs both autosaving can overwrite each other's edits.
+  // Warn any tab opened while another is already running so the doctor uses one.
+  try {
+    const bc = new BroadcastChannel('aarna-opd');
+    bc.onmessage = (ev) => {
+      if (ev.data === 'ping') { bc.postMessage('pong'); }        // existing tab replies
+      else if (ev.data === 'pong' && !window._multiTabWarned) {  // another tab exists
+        window._multiTabWarned = true;
+        toast('⚠ Aarna OPD is already open in another tab/window. Use only ONE at a time to avoid overwriting patient data.', 'warning', 9000);
+      }
+    };
+    bc.postMessage('ping');
+  } catch (e) { /* BroadcastChannel unsupported — non-critical */ }
 
   // PWA "New Patient" app shortcut → open the registration modal on launch
   try {
@@ -3042,25 +3209,18 @@ async function init() {
   } catch (e) {}
 }
 
-function gdriveAutoReconnect() {
+async function gdriveAutoReconnect() {
   try {
-    const clientId = localStorage.getItem('gdrive_client_id');
-    if (!clientId) return;
-    // Use prompt:none for silent re-auth (no popup if user already granted access)
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: 'https://www.googleapis.com/auth/drive.file',
-      prompt: 'none',
-      callback: async function(resp) {
-        if (resp.error || !resp.access_token) return; // silent fail, user can reconnect manually
-        GDrive.token = resp.access_token;
-        GDrive._tokenExpiry = Date.now() + 55 * 60 * 1000; // tokens expire in ~1hr; refresh at 55m
-        updateGdriveUI();
-        gdriveStartAutoBackup();
-      }
-    });
-    client.requestAccessToken({ prompt: 'none' });
-  } catch(e) { /* google lib not loaded yet, skip */ }
+    await gdriveRequestToken(true);   // silent re-auth
+    updateGdriveUI();
+    gdriveStartAutoBackup();
+    gdriveBackupNow();                // back up immediately on reconnect
+  } catch (e) {
+    // Silent reconnect failed (Google session gone / cookies blocked). Make it
+    // VISIBLE so backups never stop unnoticed — the doctor can reconnect manually.
+    console.warn('Drive silent reconnect failed', e);
+    updateGdriveUI();                 // shows "⚠ Reconnect needed — backups paused"
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
@@ -3342,6 +3502,37 @@ function gdriveDisconnect() {
   toast("Disconnected from Google Drive");
 }
 
+const LAST_DRIVE_OK_KEY = 'last_drive_backup_at';
+
+// Request/refresh a Drive access token as a Promise (used by connect, silent
+// reconnect, and 401-retry). Resolves with the token or rejects on failure.
+function gdriveRequestToken(silent) {
+  return new Promise((resolve, reject) => {
+    const clientId = localStorage.getItem('gdrive_client_id');
+    if (!clientId || typeof google === 'undefined' || !google.accounts) {
+      return reject(new Error('gis-unavailable'));
+    }
+    try {
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        prompt: silent ? 'none' : '',
+        callback: (resp) => {
+          if (resp && resp.access_token) {
+            GDrive.token = resp.access_token;
+            GDrive._tokenExpiry = Date.now() + 55 * 60 * 1000;
+            localStorage.setItem('gdrive_connected', '1');
+            resolve(resp.access_token);
+          } else {
+            reject(new Error((resp && resp.error) || 'token-failed'));
+          }
+        }
+      });
+      client.requestAccessToken({ prompt: silent ? 'none' : '' });
+    } catch (e) { reject(e); }
+  });
+}
+
 function updateGdriveUI() {
   const connected = !!GDrive.token;
   const statusEl = document.getElementById("gdrive-status");
@@ -3350,17 +3541,25 @@ function updateGdriveUI() {
   const icon = document.getElementById("backup-status-icon");
   if (!statusEl) return;
   if (connected) {
-    statusEl.textContent = "Connected — auto-backup every minute";
+    const last = parseInt(localStorage.getItem(LAST_DRIVE_OK_KEY) || '0', 10);
+    statusEl.textContent = last
+      ? "Connected — last backup " + new Date(last).toLocaleString("en-IN")
+      : "Connected — auto-backup every 10 min";
     statusEl.style.color = "#16a34a";
     if (connectBtn) connectBtn.style.display = "none";
     if (disconnectBtn) disconnectBtn.style.display = "";
-    if (icon) { icon.textContent = "✓"; icon.style.color = "#16a34a"; }
+    if (icon) { icon.textContent = "✓"; icon.style.color = "#16a34a"; icon.title = "Google Drive backup active"; }
   } else {
-    statusEl.textContent = "Not connected";
-    statusEl.style.color = "var(--text3)";
+    const wasConnected = localStorage.getItem("gdrive_connected") === "1";
+    statusEl.textContent = wasConnected ? "⚠ Reconnect needed — backups paused" : "Not connected";
+    statusEl.style.color = wasConnected ? "#dc2626" : "var(--text3)";
     if (connectBtn) connectBtn.style.display = "";
     if (disconnectBtn) disconnectBtn.style.display = "none";
-    if (icon) { icon.textContent = "☁"; icon.style.color = ""; }
+    if (icon) {
+      icon.textContent = wasConnected ? "!" : "☁";
+      icon.style.color = wasConnected ? "#dc2626" : "";
+      icon.title = wasConnected ? "Google Drive backup NEEDS RECONNECT" : "Backup";
+    }
   }
 }
 
@@ -3381,59 +3580,111 @@ async function gdriveEnsureFolder() {
   return GDrive.folderId;
 }
 
+let _driveFailToastAt = 0;
+
+// Performs the actual upload. Returns true on success. Throws {status} on HTTP error.
+async function _gdriveUpload(json) {
+  const folderId = await gdriveEnsureFolder();
+  if (GDrive.fileId) {
+    const patchRes = await fetch("https://www.googleapis.com/upload/drive/v3/files/" + GDrive.fileId + "?uploadType=media", {
+      method: "PATCH",
+      headers: { Authorization: "Bearer " + GDrive.token, "Content-Type": "application/json" },
+      body: json
+    });
+    if (patchRes.status === 404) {
+      GDrive.fileId = null; localStorage.removeItem("gdrive_file_id");   // stale ID → recreate
+    } else if (!patchRes.ok) {
+      const err = new Error("Drive PATCH failed: " + patchRes.status); err.status = patchRes.status; throw err;
+    }
+  }
+  if (!GDrive.fileId) {
+    const meta = { name: "aarna-opd-backup.json", parents: [folderId] };
+    const form = new FormData();
+    form.append("metadata", new Blob([JSON.stringify(meta)], { type: "application/json" }));
+    form.append("file", new Blob([json], { type: "application/json" }));
+    const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+      method: "POST", headers: { Authorization: "Bearer " + GDrive.token }, body: form
+    });
+    if (!res.ok) { const err = new Error("Drive POST failed: " + res.status); err.status = res.status; throw err; }
+    const created = await res.json();
+    GDrive.fileId = created.id;
+    localStorage.setItem("gdrive_file_id", GDrive.fileId);
+  }
+}
+
 async function gdriveBackupNow() {
-  if (!GDrive.token) return;
+  if (!GDrive.token) return false;
+  let json;
   try {
     const [patients, templates, appointments] = await Promise.all([
       DB.getAllPatients(), DB.getAllTemplates(), DB.getAllAppointments()
     ]);
     const visitArrays = await Promise.all(patients.map(p => DB.getPatientVisits(p.id)));
     const allVisits = visitArrays.flat();
-    const data = {
+    json = JSON.stringify({
       version: 4, exportedAt: new Date().toISOString(),
       clinic: "Aarna Orthopaedic Clinic",
       patients, visits: allVisits, templates, appointments,
       medList: JSON.parse(localStorage.getItem(MEDS_KEY) || "[]"),
       medRepository: JSON.parse(localStorage.getItem("med_repository") || "[]")
-    };
-    const json = JSON.stringify(data);
-    const folderId = await gdriveEnsureFolder();
+    });
+  } catch (e) {
+    console.error("Drive backup: could not read DB", e);
+    return false;
+  }
 
-    if (GDrive.fileId) {
-      const patchRes = await fetch("https://www.googleapis.com/upload/drive/v3/files/" + GDrive.fileId + "?uploadType=media", {
-        method: "PATCH",
-        headers: { Authorization: "Bearer " + GDrive.token, "Content-Type": "application/json" },
-        body: json
-      });
-      if (patchRes.status === 404) {
-        // File was deleted from Drive — clear stale ID so we create a new one
-        GDrive.fileId = null;
-        localStorage.removeItem("gdrive_file_id");
-      } else if (!patchRes.ok) {
-        throw new Error("Drive PATCH failed: " + patchRes.status);
+  try {
+    await _gdriveUpload(json);
+  } catch (e) {
+    // Expired/invalid token → refresh once and retry the upload
+    if (e.status === 401 || e.status === 403) {
+      try {
+        await gdriveRequestToken(true);
+        await _gdriveUpload(json);
+      } catch (e2) {
+        return _gdriveBackupFailed(e2);
       }
+    } else {
+      return _gdriveBackupFailed(e);
     }
-    if (!GDrive.fileId) {
-      const meta = { name: "aarna-opd-backup.json", parents: [folderId] };
-      const form = new FormData();
-      form.append("metadata", new Blob([JSON.stringify(meta)], { type: "application/json" }));
-      form.append("file", new Blob([json], { type: "application/json" }));
-      const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
-        method: "POST", headers: { Authorization: "Bearer " + GDrive.token }, body: form
-      });
-      const created = await res.json();
-      GDrive.fileId = created.id;
-      localStorage.setItem("gdrive_file_id", GDrive.fileId);
-    }
+  }
 
-    const timeStr = new Date().toLocaleTimeString("en-IN");
-    setLastBackupInfo("Last Drive backup: " + timeStr);
+  // Success
+  localStorage.setItem(LAST_DRIVE_OK_KEY, String(Date.now()));
+  setLastBackupInfo("Last Drive backup: " + new Date().toLocaleTimeString("en-IN"));
+  const icon = document.getElementById("backup-status-icon");
+  if (icon) { icon.textContent = "✓"; icon.style.color = "#16a34a"; icon.title = "Google Drive backup active"; }
+  updateGdriveUI();
+  return true;
+}
+
+function _gdriveBackupFailed(e) {
+  console.error("Drive backup failed", e);
+  const icon = document.getElementById("backup-status-icon");
+  if (icon) { icon.textContent = "!"; icon.style.color = "#dc2626"; icon.title = "Google Drive backup FAILED — check connection"; }
+  // Loud but throttled: warn at most once every 5 minutes so it isn't spammy
+  if (Date.now() - _driveFailToastAt > 5 * 60 * 1000) {
+    _driveFailToastAt = Date.now();
+    toast("⚠ Google Drive backup failed — your data is NOT backed up to Drive. Open Backup to reconnect.", "error", 6000);
+  }
+  return false;
+}
+
+// Warn on load if Drive was set up but hasn't backed up successfully in >24h
+function checkBackupHealth() {
+  if (localStorage.getItem("gdrive_connected") !== "1") return;
+  const last = parseInt(localStorage.getItem(LAST_DRIVE_OK_KEY) || "0", 10);
+  const age = Date.now() - last;
+  if (!last || age > 24 * 60 * 60 * 1000) {
+    const days = last ? Math.floor(age / (24 * 60 * 60 * 1000)) : null;
+    toast(
+      last
+        ? `⚠ No Google Drive backup for ${days}+ day(s). Open Backup and reconnect to protect your data.`
+        : "⚠ Google Drive is set up but no backup has completed yet. Open Backup to reconnect.",
+      "error", 7000
+    );
     const icon = document.getElementById("backup-status-icon");
-    if (icon) { icon.textContent = "✓"; icon.style.color = "#16a34a"; }
-  } catch(e) {
-    console.error("Drive backup failed", e);
-    const icon = document.getElementById("backup-status-icon");
-    if (icon) { icon.textContent = "!"; icon.style.color = "#dc2626"; }
+    if (icon) { icon.textContent = "!"; icon.style.color = "#dc2626"; icon.title = "Backup overdue — reconnect Google Drive"; }
   }
 }
 
@@ -3497,7 +3748,7 @@ async function buildPrescriptionHtml() {
   const v = State.currentVisit;
   if (!p || !v) return null;
   const age = p.age || calcAge(p.dob) || '?';
-  const now = new Date();
+  const now = new Date(v.date || Date.now());   // prescription date/time (editable)
   const logoSrc = await getLogoDataUrl();
 
   const medRows = State.medicines.map((item, i) => {
