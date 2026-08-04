@@ -1,7 +1,7 @@
 // Network-first service worker — always serves the latest deployed files when
 // online; the cache is only a fallback for offline use. Bump CACHE on breaking
 // changes to purge old caches.
-const CACHE = 'sportsmed-opd-v3';
+const CACHE = 'sportsmed-opd-v4';
 
 self.addEventListener('install', e => {
   self.skipWaiting();

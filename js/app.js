@@ -210,12 +210,12 @@ const DOCTOR = {
   website: "www.drchetanmdojode.com",
   clinics: [
     {
-      name: "Aarna Orthopaedic Clinic",
+      name: "OSR — OrthoSportsRobotics Clinic / Aarna Clinic",
       address: "1182/1, 20th Main Rd, A Block,\nSahakar Nagar,\nBengaluru, Karnataka 560092",
       hours: "Hours: 5:00 pm to 7:00 pm"
     },
     {
-      name: "SPARSH Hospital Yelahanka",
+      name: "Sparsh Hospital Yelahanka",
       address: "New Airport Road,\nKogilu Cross, Nehru Nagar,\nBengaluru, Karnataka 560064",
       hours: "Hours: 10:00 am to 4:00pm"
     }
@@ -223,10 +223,14 @@ const DOCTOR = {
 };
 
 // ─── Google Review ────────────────────────────────────────────────────────────
-// Your Google Business Profile "write a review" links. Add/edit as needed.
+// Google Business Profile "write a review" links (open the review box directly).
+// ⚠ These must stay in sync with PROFILES in review.html and qr.html.
+// Verified mapping — do not swap:
+//   OSR / Aarna  → CSV6MSTxo0qDEBM
+//   Sparsh       → CbG5qO3MCVHOEBM
 const GOOGLE_REVIEW_PROFILES = [
-  { label: "Aarna Orthopaedic Clinic",  code: "aarna",  url: "https://g.page/r/CbG5qO3MCVHOEAE/review" },
-  { label: "SPARSH Hospital Yelahanka", code: "sparsh", url: "https://g.page/r/CSV6MSTxo0qDEAE/review" }
+  { label: "OSR — OrthoSportsRobotics Clinic / Aarna Clinic", code: "aarna",  url: "https://g.page/r/CSV6MSTxo0qDEBM/review" },
+  { label: "Sparsh Hospital Yelahanka",                       code: "sparsh", url: "https://g.page/r/CbG5qO3MCVHOEBM/review" }
 ];
 
 // Hosted star-rating page (5★ → Google, lower → private feedback).
@@ -2378,8 +2382,8 @@ function printInvoice() {
 <div class="page">
   <div class="inv-header">
     <div>
-      <img src="assets/logo.png" style="height:52px;width:auto;object-fit:contain;margin-bottom:4px;display:block;" alt="logo">
-      <div class="clinic-name">Aarna Orthopaedic Clinic</div>
+      <img src="assets/logo.png?v=20260806" style="height:52px;width:52px;object-fit:contain;margin-bottom:4px;display:block;" alt="OSR">
+      <div class="clinic-name">OSR — OrthoSportsRobotics Clinic / Aarna Clinic</div>
       <div class="clinic-sub">Dr Chetan M Dojode · MS (Orth) · ${DOCTOR.phone}<br>${DOCTOR.clinics[0].address.replace(/\n/g,', ')}</div>
     </div>
     <div>
@@ -2405,7 +2409,7 @@ function printInvoice() {
       <tr class="total-row"><td colspan="2" style="text-align:right">Total</td><td class="amt">₹ ${total.toLocaleString('en-IN')}</td></tr>
     </tbody>
   </table>
-  <div class="footer-note">Thank you for visiting Aarna Orthopaedic Clinic · This is a computer-generated invoice</div>
+  <div class="footer-note">Thank you for visiting OSR — OrthoSportsRobotics Clinic / Aarna Clinic · This is a computer-generated invoice</div>
 </div>
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`;
@@ -2433,7 +2437,7 @@ async function shareInvoice() {
   const patientName = p.name || 'Patient';
   const total = items.reduce((s, i) => s + i.amt, 0);
   const date = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
-  const msgText = `Dear ${patientName},\n\nYour invoice of ₹${total.toLocaleString('en-IN')} from Aarna Orthopaedic Clinic dated ${date}.\n\nThank you for visiting.\nDr Chetan M Dojode`;
+  const msgText = `Dear ${patientName},\n\nYour invoice of ₹${total.toLocaleString('en-IN')} from OSR — OrthoSportsRobotics Clinic / Aarna Clinic dated ${date}.\n\nThank you for visiting.\nDr Chetan M Dojode`;
 
   showInvoiceSharePanel(phone, msgText, patientName);
 
@@ -2612,7 +2616,7 @@ async function sharePrescription() {
   const patientName = p.name || 'Patient';
   const diagnosis = v.diagnosis || '';
   const date = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
-  const msgText = `Dear ${patientName},\n\nYour prescription from Dr Chetan M Dojode dated ${date}${diagnosis ? '\nDiagnosis: ' + diagnosis : ''}.\n\nAarna Orthopaedic & SportsMed Clinic\nPh: +91 ${DOCTOR.phone || ''}`;
+  const msgText = `Dear ${patientName},\n\nYour prescription from Dr Chetan M Dojode dated ${date}${diagnosis ? '\nDiagnosis: ' + diagnosis : ''}.\n\nOSR — OrthoSportsRobotics Clinic / Aarna Clinic\nPh: +91 ${DOCTOR.phone || ''}`;
 
   showSharePanel(phone, msgText, patientName);
   generateAndAttachPdf(patientName, date, msgText);
@@ -2805,7 +2809,7 @@ async function printPrescription() {
       </div>
     </div>
     <div class="header-right">
-      <img src="assets/logo.png" style="height:64px;width:auto;object-fit:contain;" alt="Aarna Orthopaedic Clinic">
+      <img src="assets/logo.png?v=20260806" style="height:70px;width:70px;object-fit:contain;" alt="OSR — OrthoSportsRobotics Clinic / Aarna Clinic">
     </div>
   </div>
 
@@ -3086,7 +3090,7 @@ let _logoDataUrl = null;
 async function getLogoDataUrl() {
   if (_logoDataUrl) return _logoDataUrl;
   try {
-    const resp = await fetch('assets/logo.png');
+    const resp = await fetch('assets/logo.png?v=20260806');
     const blob = await resp.blob();
     return new Promise(res => {
       const r = new FileReader();
@@ -3195,7 +3199,7 @@ async function init() {
       if (ev.data === 'ping') { bc.postMessage('pong'); }        // existing tab replies
       else if (ev.data === 'pong' && !window._multiTabWarned) {  // another tab exists
         window._multiTabWarned = true;
-        toast('⚠ Aarna OPD is already open in another tab/window. Use only ONE at a time to avoid overwriting patient data.', 'warning', 9000);
+        toast('⚠ OSR OPD is already open in another tab/window. Use only ONE at a time to avoid overwriting patient data.', 'warning', 9000);
       }
     };
     bc.postMessage('ping');
@@ -3353,7 +3357,7 @@ async function exportBackup() {
   const allVisits = visitArrays.flat();
   const data = {
     version: 4, exportedAt: new Date().toISOString(),
-    clinic: "Aarna Orthopaedic Clinic",
+    clinic: "OSR — OrthoSportsRobotics Clinic / Aarna Clinic",
     patients, visits: allVisits, templates, appointments,
     medList: JSON.parse(localStorage.getItem(MEDS_KEY) || "[]"),
     // kept for backward-compatible restores of older backups
@@ -3623,7 +3627,7 @@ async function gdriveBackupNow() {
     const allVisits = visitArrays.flat();
     json = JSON.stringify({
       version: 4, exportedAt: new Date().toISOString(),
-      clinic: "Aarna Orthopaedic Clinic",
+      clinic: "OSR — OrthoSportsRobotics Clinic / Aarna Clinic",
       patients, visits: allVisits, templates, appointments,
       medList: JSON.parse(localStorage.getItem(MEDS_KEY) || "[]"),
       medRepository: JSON.parse(localStorage.getItem("med_repository") || "[]")
@@ -3809,7 +3813,7 @@ ${v.followUp ? `.followup-box { margin-top:10px; border:1px dashed #999; padding
     <div class="doctor-title">${DOCTOR.title} – ${DOCTOR.subtitle}</div>
     <div class="doctor-quals">${DOCTOR.qualifications}<br>${DOCTOR.fellowships.join('<br>')}<br>${DOCTOR.kmc} | Ph: ${DOCTOR.phone}</div>
   </div>
-  ${logoSrc ? `<img src="${logoSrc}" style="height:60px;object-fit:contain;">` : ''}
+  ${logoSrc ? `<img src="${logoSrc}" style="height:70px;width:70px;object-fit:contain;">` : ''}
 </div>
 <div class="patient-bar">
   <span>${esc(p.id)}: ${esc(p.name)} (${age}y, ${esc(p.gender) || 'M'}) &nbsp; ${esc(p.phone || '')}</span>
@@ -3876,7 +3880,7 @@ td { padding:6px 10px;border:1px solid #ddd;font-size:12px; }
 <div class="page">
   <div class="inv-header">
     <div>
-      <div class="clinic-name">Aarna Orthopaedic Clinic</div>
+      <div class="clinic-name">OSR — OrthoSportsRobotics Clinic / Aarna Clinic</div>
       <div class="clinic-sub">Dr Chetan M Dojode · MS (Orth) · ${DOCTOR.phone}<br>${DOCTOR.clinics[0].address.replace(/\n/g,', ')}</div>
     </div>
     <div>
@@ -3900,7 +3904,7 @@ td { padding:6px 10px;border:1px solid #ddd;font-size:12px; }
       <tr class="total-row"><td colspan="2" style="text-align:right">Total</td><td class="amt">₹ ${total.toLocaleString('en-IN')}</td></tr>
     </tbody>
   </table>
-  <div class="footer-note">Thank you for visiting Aarna Orthopaedic Clinic · Computer-generated invoice</div>
+  <div class="footer-note">Thank you for visiting OSR — OrthoSportsRobotics Clinic / Aarna Clinic · Computer-generated invoice</div>
 </div></body></html>`;
 }
 
