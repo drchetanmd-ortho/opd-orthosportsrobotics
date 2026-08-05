@@ -233,8 +233,8 @@ const GOOGLE_REVIEW_PROFILES = [
   //   CSV6MSTxo0qD → "OSR - OrthoSportsRobotics Clinic / Aarna Clinic"
   //   CbG5qO3MCVHO → "Best Orthopaedic Surgeon in North Bangalore" (Sparsh)
   // The "EAE" suffix is what opens the write-a-review box — do NOT change it.
-  { label: "OSR — OrthoSportsRobotics Clinic / Aarna Clinic", code: "aarna",  url: "https://g.page/r/CSV6MSTxo0qDEAE/review" },
-  { label: "Sparsh Hospital Yelahanka",                       code: "sparsh", url: "https://g.page/r/CbG5qO3MCVHOEAE/review" }
+  { label: "OSR - OrthoSportsRobotics, Aarna Clinic",                      code: "aarna",  url: "https://g.page/r/CSV6MSTxo0qDEAE/review" },
+  { label: "OSR - OrthoSportsRobotics, Sparsh Hospital Yelahanka",         code: "sparsh", url: "https://g.page/r/CbG5qO3MCVHOEAE/review" }
 ];
 
 // Hosted star-rating page (5★ → Google, lower → private feedback).
@@ -3295,27 +3295,33 @@ async function backupAllPdfsNow(opts) {
   try {
     const since = parseInt(localStorage.getItem(PDF_ALL_KEY) || '0', 10);
     const patients = await DB.getAllPatients();
-    const jobs = [];
+    const rxJobs = [], invJobs = [];
     for (const p of patients) {
       const visits = await DB.getPatientVisits(p.id);
       for (const v of visits) {
         const changedAt = v.savedAt || v.date || 0;
-        if (changedAt > since) jobs.push({ p, v });
+        if (changedAt > since) rxJobs.push({ p, v });
+        // Invoice PDFs regenerate on their OWN savedAt, independent of the visit
+        if (v.invoice && v.invoice.items && v.invoice.items.length && (v.invoice.savedAt || 0) > since) {
+          invJobs.push({ p, v });
+        }
       }
     }
-    if (!jobs.length) {
-      if (!silent) toast('All prescriptions already backed up ✓', 'success', 3000);
+    const totalJobs = rxJobs.length + invJobs.length;
+    if (!totalJobs) {
+      if (!silent) toast('Everything already backed up ✓', 'success', 3000);
       return 0;
     }
     // Automatic runs never block on a dialog
-    if (!silent && jobs.length > 25 &&
-        !confirm(`Generate & back up ${jobs.length} prescription PDFs?\n\nThis may take a few minutes.`)) return 0;
+    if (!silent && totalJobs > 25 &&
+        !confirm(`Generate & back up ${totalJobs} PDF(s) (prescriptions + invoices)?\n\nThis may take a few minutes.`)) return 0;
 
     // Temporarily swap State to render each visit's PDF, then restore
     const keep = { p: State.currentPatient, v: State.currentVisit, m: State.medicines };
     let done = 0, failed = 0;
-    if (!silent) toast(`Backing up ${jobs.length} prescription${jobs.length > 1 ? 's' : ''}…`, 'success', 3000);
-    for (const { p, v } of jobs) {
+    if (!silent) toast(`Backing up ${totalJobs} PDF${totalJobs > 1 ? 's' : ''}…`, 'success', 3000);
+
+    for (const { p, v } of rxJobs) {
       try {
         State.currentPatient = p;
         State.currentVisit = v;
@@ -3339,15 +3345,31 @@ async function backupAllPdfsNow(opts) {
           : new Date().toISOString().slice(0, 10).replace(/-/g, '');
         await autoBackupPdf(blob, `${visitDate}-${phone}-RX.pdf`, p.id);
         done++;
-      } catch (e) { console.error('PDF backup failed for', p.id, e); failed++; }
+      } catch (e) { console.error('Rx PDF backup failed for', p.id, e); failed++; }
     }
+
+    // Invoice PDFs — built straight from the stored invoice data (works even
+    // for a patient who isn't the one currently open on screen).
+    for (const { p, v } of invJobs) {
+      try {
+        const html = buildInvoiceHtml(p, v.invoice);
+        if (!html) { failed++; continue; }
+        const blob = await renderHtmlToPdfBlobA5(html);
+        const phone = (p.phone || '').replace(/\D/g, '');
+        const invDate = new Date(v.invoice.savedAt || v.date || Date.now())
+          .toISOString().slice(0, 10).replace(/-/g, '');
+        await autoBackupPdf(blob, `${invDate}-${phone}-INV.pdf`, p.id);
+        done++;
+      } catch (e) { console.error('Invoice PDF backup failed for', p.id, e); failed++; }
+    }
+
     // Restore whatever was open before
     State.currentPatient = keep.p; State.currentVisit = keep.v; State.medicines = keep.m;
     if (keep.p) renderMedicineTable();
 
     localStorage.setItem(PDF_ALL_KEY, String(Date.now()));
     setLastBackupInfo(`PDF backup: ${done} saved${failed ? `, ${failed} failed` : ''} at ${new Date().toLocaleTimeString('en-IN')}`);
-    toast(`✓ ${done} prescription PDF${done !== 1 ? 's' : ''} backed up${failed ? ` · ${failed} failed` : ''}`, failed ? 'warning' : 'success', 4500);
+    toast(`✓ ${done} PDF${done !== 1 ? 's' : ''} backed up (Rx + invoices)${failed ? ` · ${failed} failed` : ''}`, failed ? 'warning' : 'success', 4500);
     return done;
   } finally {
     _pdfAllRunning = false;
@@ -3977,14 +3999,17 @@ ${v.referredTo ? `<div class="section-block" style="margin-top:6px;"><span class
 </div></body></html>`;
 }
 
-function buildInvoiceHtml() {
-  const p = State.currentPatient;
-  const items = getInvoiceItems();
+// patientOverride/invOverride let this build an invoice for a patient who
+// ISN'T the one currently open on screen — needed so the automatic backup
+// sweep can regenerate invoice PDFs for every patient, not just the open one.
+function buildInvoiceHtml(patientOverride, invOverride) {
+  const p = patientOverride || State.currentPatient;
+  const items = invOverride ? (invOverride.items || []) : getInvoiceItems();
   if (!p || !items.length) return null;
-  const payMode = document.getElementById('inv-pay-mode')?.value || 'Cash';
+  const payMode = invOverride ? (invOverride.payMode || 'Cash') : (document.getElementById('inv-pay-mode')?.value || 'Cash');
   const total = items.reduce((s, i) => s + i.amt, 0);
   const age = p.age || calcAge(p.dob) || '?';
-  const now = new Date();
+  const now = invOverride && invOverride.savedAt ? new Date(invOverride.savedAt) : new Date();
   const phone = (p.phone || p.whatsapp || '').replace(/\D/g,'');
   const invoiceNo = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${phone}-INV`;
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
