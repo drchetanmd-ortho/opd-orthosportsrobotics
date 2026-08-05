@@ -7,6 +7,9 @@
 <title>How was your experience? · Dr Chetan M Dojode</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Warm up Google's servers so the 5-star hand-off is near-instant -->
+<link rel="preconnect" href="https://g.page">
+<link rel="preconnect" href="https://www.google.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -35,12 +38,16 @@
   .body{ padding:26px 22px 30px; text-align:center; }
   .body h2{ font-size:16px; font-weight:600; margin-bottom:4px; }
   .body p.sub{ font-size:13px; color:var(--text2); margin-bottom:20px; }
-  .stars{ display:flex; justify-content:center; gap:6px; margin-bottom:22px; }
+  .stars{ display:flex; justify-content:center; gap:2px; margin-bottom:22px; }
   .star{
-    font-size:40px; cursor:pointer; color:#d9e2e0; line-height:1;
+    font-size:44px; cursor:pointer; color:#d9e2e0; line-height:1;
+    padding:6px 4px;                      /* bigger tap target for thumbs */
     transition:transform .12s, color .12s; user-select:none;
+    touch-action:manipulation;            /* kills the 300ms double-tap delay */
+    -webkit-tap-highlight-color:transparent;
   }
   .star:hover{ transform:scale(1.12); }
+  .star:active{ transform:scale(1.2); }
   .star.on{ color:var(--star); }
   .step-feedback{ display:none; text-align:left; }
   .step-feedback textarea{
@@ -105,9 +112,14 @@
 
 <script>
   // ── Clinic profiles (short code → Google review link) ─────────────────────
+  // ⚠ Must match GOOGLE_REVIEW_PROFILES in js/app.js and PROFILES in qr.html.
+  // Verified against the Google Business profiles:
+  //   CSV6MSTxo0qD = "OSR - OrthoSportsRobotics Clinic / Aarna Clinic"
+  //   CbG5qO3MCVHO = "Best Orthopaedic Surgeon in North Bangalore" (Sparsh)
+  // The "EAE" suffix is what opens the write-a-review box — do NOT change it.
   var PROFILES = {
-    aarna:  { name:"Aarna Orthopaedic Clinic",  url:"https://g.page/r/CbG5qO3MCVHOEAE/review" },
-    sparsh: { name:"SPARSH Hospital Yelahanka", url:"https://g.page/r/CSV6MSTxo0qDEAE/review" }
+    aarna:  { name:"OSR — OrthoSportsRobotics Clinic / Aarna Clinic", url:"https://g.page/r/CSV6MSTxo0qDEAE/review" },
+    sparsh: { name:"Sparsh Hospital Yelahanka",                       url:"https://g.page/r/CbG5qO3MCVHOEAE/review" }
   };
   // Clinic WhatsApp number that receives private (low-rating) feedback:
   var CLINIC_WHATSAPP = "919480909009";
@@ -118,22 +130,33 @@
   document.getElementById('clinic-name').textContent = profile.name;
 
   var stars = document.querySelectorAll('.star');
+  var rated = false;                       // one tap only — ignore double taps
   function paint(n){ stars.forEach(function(s){ s.classList.toggle('on', +s.dataset.v <= n); }); }
 
+  // Hover preview only on mouse devices; on touch it leaves stars stuck lit
+  if (window.matchMedia && window.matchMedia('(hover: hover)').matches) {
+    stars.forEach(function(s){
+      s.addEventListener('mouseenter', function(){ if (!rated) paint(+s.dataset.v); });
+    });
+    document.getElementById('stars').addEventListener('mouseleave', function(){ if (!rated) paint(0); });
+  }
   stars.forEach(function(s){
-    s.addEventListener('mouseenter', function(){ paint(+s.dataset.v); });
     s.addEventListener('click', function(){ handleRating(+s.dataset.v); });
   });
-  document.getElementById('stars').addEventListener('mouseleave', function(){ paint(0); });
 
   function handleRating(v){
+    if (rated) return;
+    rated = true;
     paint(v);
     if (v >= 5){
-      // 5 stars → straight to Google review
+      // 5 stars → straight to Google, as fast as possible
       document.getElementById('step-rate').style.display = 'none';
       document.getElementById('step-thanks').style.display = 'block';
-      document.getElementById('thanks-msg').textContent = 'Opening Google to post your review…';
-      setTimeout(function(){ location.href = profile.url; }, 900);
+      document.getElementById('thanks-msg').innerHTML =
+        'Opening Google…<br><a href="' + profile.url + '" style="color:var(--teal);font-weight:700;">' +
+        "Tap here if it doesn't open</a>";
+      // replace() so Back doesn't bounce the patient into the rating page again
+      setTimeout(function(){ location.replace(profile.url); }, 120);
     } else {
       // Under 5 → private feedback, NOT sent to Google
       document.getElementById('step-rate').style.display = 'none';

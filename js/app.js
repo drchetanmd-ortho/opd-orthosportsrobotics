@@ -229,8 +229,12 @@ const DOCTOR = {
 //   OSR / Aarna  → CSV6MSTxo0qDEBM
 //   Sparsh       → CbG5qO3MCVHOEBM
 const GOOGLE_REVIEW_PROFILES = [
-  { label: "OSR — OrthoSportsRobotics Clinic / Aarna Clinic", code: "aarna",  url: "https://g.page/r/CSV6MSTxo0qDEBM/review" },
-  { label: "Sparsh Hospital Yelahanka",                       code: "sparsh", url: "https://g.page/r/CbG5qO3MCVHOEBM/review" }
+  // Verified against the live Google Business profiles (CID decoded from each link):
+  //   CSV6MSTxo0qD → "OSR - OrthoSportsRobotics Clinic / Aarna Clinic"
+  //   CbG5qO3MCVHO → "Best Orthopaedic Surgeon in North Bangalore" (Sparsh)
+  // The "EAE" suffix is what opens the write-a-review box — do NOT change it.
+  { label: "OSR — OrthoSportsRobotics Clinic / Aarna Clinic", code: "aarna",  url: "https://g.page/r/CSV6MSTxo0qDEAE/review" },
+  { label: "Sparsh Hospital Yelahanka",                       code: "sparsh", url: "https://g.page/r/CbG5qO3MCVHOEAE/review" }
 ];
 
 // Hosted star-rating page (5★ → Google, lower → private feedback).
@@ -3191,6 +3195,10 @@ async function init() {
   // Give the silent reconnect ~4s to complete, then check whether backups are healthy
   setTimeout(checkBackupHealth, 4000);
 
+  // Restore the saved prescription-PDF folder, then start the daily (midnight)
+  // automatic backup of everything — Drive database + new prescription PDFs.
+  restorePdfFolder().finally(startDailyBackupScheduler);
+
   // Multi-tab guard: two tabs both autosaving can overwrite each other's edits.
   // Warn any tab opened while another is already running so the doctor uses one.
   try {
@@ -3271,10 +3279,13 @@ async function driveBackupNowClick() {
 // ALL patients' visits changed since the last run (not just the open patient).
 const PDF_ALL_KEY = 'pdf_backup_all_at';
 
-async function backupAllPdfsNow() {
-  if (_pdfAllRunning) { toast('PDF backup already running…', 'warning'); return; }
+// opts.silent → no confirm prompt / quieter toasts (used by the daily auto-backup)
+async function backupAllPdfsNow(opts) {
+  const silent = !!(opts && opts.silent);
+  if (_pdfAllRunning) { if (!silent) toast('PDF backup already running…', 'warning'); return 0; }
   if (!PdfStore.dirHandle && !GDrive.token) {
-    toast('Select a folder or connect Drive first', 'error'); return;
+    if (!silent) toast('Select a folder or connect Drive first', 'error');
+    return 0;
   }
   // Flush any pending edit of the open patient BEFORE raising the sweep flag
   // and swapping State, so their unsaved changes are neither lost nor misfiled.
@@ -3292,14 +3303,18 @@ async function backupAllPdfsNow() {
         if (changedAt > since) jobs.push({ p, v });
       }
     }
-    if (!jobs.length) { toast('All prescriptions already backed up ✓', 'success', 3000); return; }
-    if (jobs.length > 25 &&
-        !confirm(`Generate & back up ${jobs.length} prescription PDFs?\n\nThis may take a few minutes.`)) return;
+    if (!jobs.length) {
+      if (!silent) toast('All prescriptions already backed up ✓', 'success', 3000);
+      return 0;
+    }
+    // Automatic runs never block on a dialog
+    if (!silent && jobs.length > 25 &&
+        !confirm(`Generate & back up ${jobs.length} prescription PDFs?\n\nThis may take a few minutes.`)) return 0;
 
     // Temporarily swap State to render each visit's PDF, then restore
     const keep = { p: State.currentPatient, v: State.currentVisit, m: State.medicines };
     let done = 0, failed = 0;
-    toast(`Backing up ${jobs.length} prescription${jobs.length > 1 ? 's' : ''}…`, 'success', 3000);
+    if (!silent) toast(`Backing up ${jobs.length} prescription${jobs.length > 1 ? 's' : ''}…`, 'success', 3000);
     for (const { p, v } of jobs) {
       try {
         State.currentPatient = p;
@@ -3333,12 +3348,90 @@ async function backupAllPdfsNow() {
     localStorage.setItem(PDF_ALL_KEY, String(Date.now()));
     setLastBackupInfo(`PDF backup: ${done} saved${failed ? `, ${failed} failed` : ''} at ${new Date().toLocaleTimeString('en-IN')}`);
     toast(`✓ ${done} prescription PDF${done !== 1 ? 's' : ''} backed up${failed ? ` · ${failed} failed` : ''}`, failed ? 'warning' : 'success', 4500);
+    return done;
   } finally {
     _pdfAllRunning = false;
     // Re-arm autosave: anything typed while the sweep suppressed it gets saved
     if (State.currentPatient && State.currentVisit) scheduleAutoSave();
   }
 }
+// ─── Daily automatic backup (runs at midnight) ────────────────────────────────
+// Backs up everything that can run unattended: the full database to Google Drive
+// and every new prescription PDF. Runs whether or not you back up manually.
+const DAILY_BACKUP_KEY = 'last_daily_backup_day';   // 'YYYY-MM-DD' of last SUCCESS
+let _midnightTimer = null;
+let _dailyRunning = false;
+
+function _dayKey(d) {
+  d = d || new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function runDailyBackup(reason) {
+  if (_dailyRunning || _pdfAllRunning) return;
+  const today = _dayKey();
+  if (localStorage.getItem(DAILY_BACKUP_KEY) === today) return;   // already done today
+
+  const haveDrive = !!GDrive.token;
+  const havePdfTarget = !!PdfStore.dirHandle || haveDrive;
+  if (!haveDrive && !havePdfTarget) return;   // nothing configured yet — nothing to do
+
+  _dailyRunning = true;
+  let driveOk = false, pdfCount = 0, failed = false;
+  try {
+    // 1. Make sure anything on screen is saved before we snapshot the database
+    clearTimeout(_autoSaveTimer);
+    try { await _autoSaveNow(); } catch (e) {}
+
+    // 2. Whole database → Google Drive
+    if (haveDrive) {
+      driveOk = await gdriveBackupNow();
+      if (!driveOk) failed = true;
+    }
+
+    // 3. New prescription PDFs → chosen folder (and Drive queue if connected)
+    if (havePdfTarget) {
+      try { pdfCount = (await backupAllPdfsNow({ silent: true })) || 0; }
+      catch (e) { failed = true; console.error('Daily PDF backup failed', e); }
+    }
+
+    if (!failed) {
+      // Only mark the day complete on success, so a failure retries later
+      localStorage.setItem(DAILY_BACKUP_KEY, today);
+      localStorage.setItem('last_daily_backup_at', String(Date.now()));
+      const bits = [];
+      if (driveOk) bits.push('Drive');
+      if (pdfCount) bits.push(pdfCount + ' PDF' + (pdfCount !== 1 ? 's' : ''));
+      setLastBackupInfo('Daily auto-backup: ' + new Date().toLocaleString('en-IN'));
+      toast('🕛 Daily backup complete' + (bits.length ? ' — ' + bits.join(' + ') : ''), 'success', 4000);
+    } else {
+      toast('⚠ Daily backup incomplete — open Backup to check the connection', 'error', 6000);
+    }
+  } finally {
+    _dailyRunning = false;
+  }
+}
+
+// Fire just after midnight while the app is open, then re-arm for the next night.
+function scheduleMidnightBackup() {
+  clearTimeout(_midnightTimer);
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 1, 0);
+  _midnightTimer = setTimeout(() => {
+    runDailyBackup('midnight');
+    scheduleMidnightBackup();
+  }, Math.max(1000, next - now));
+}
+
+function startDailyBackupScheduler() {
+  scheduleMidnightBackup();
+  // Catch-up: if the app was closed at midnight (or the device was asleep), the
+  // day's backup runs shortly after the app is next opened — and we keep
+  // checking while it stays open, so a day can never be skipped silently.
+  setTimeout(() => runDailyBackup('startup'), 20000);
+  setInterval(() => runDailyBackup('periodic'), 30 * 60 * 1000);
+}
+
 function closeBackupModal() {
   document.getElementById("modal-backup").style.display = "none";
 }
@@ -3717,19 +3810,51 @@ function setLastBackupInfo(msg) {
 
 
 // ─── Prescription PDF Folder ───────────────────────────────────────────────────
-const PdfStore = { dirHandle: null };
+const PdfStore = { dirHandle: null, pendingHandle: null };
+const PDF_DIR_KEY = 'pdf_dir_handle';
 
+// Pick the folder AND remember it, so it survives reloads (needed for the
+// automatic daily backup — otherwise the folder is lost on every restart).
 async function selectPdfFolder() {
+  // If we restored a folder but the browser needs permission re-granted, this
+  // click is the user gesture that lets us ask for it — no need to re-pick.
+  if (PdfStore.pendingHandle) {
+    try {
+      const perm = await PdfStore.pendingHandle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        PdfStore.dirHandle = PdfStore.pendingHandle;
+        PdfStore.pendingHandle = null;
+        updatePdfFolderUI();
+        toast('Folder reconnected: ' + PdfStore.dirHandle.name);
+        return;
+      }
+    } catch (e) { /* fall through to picking a new folder */ }
+  }
   if (!window.showDirectoryPicker) {
     toast('File System Access not supported — use Chrome/Edge', 'error'); return;
   }
   try {
     PdfStore.dirHandle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'rx-pdfs' });
+    PdfStore.pendingHandle = null;
+    try { await DB.setMeta(PDF_DIR_KEY, PdfStore.dirHandle); } catch (e) {}
     updatePdfFolderUI();
     toast('Prescription folder set: ' + PdfStore.dirHandle.name);
   } catch(e) {
     if (e.name !== 'AbortError') toast('Could not access folder', 'error');
   }
+}
+
+// Restore the saved folder on startup. If the browser still holds permission we
+// can write silently; otherwise we keep the handle and ask on the next click.
+async function restorePdfFolder() {
+  try {
+    const handle = await DB.getMeta(PDF_DIR_KEY);
+    if (!handle || !handle.queryPermission) return;
+    const perm = await handle.queryPermission({ mode: 'readwrite' });
+    if (perm === 'granted') PdfStore.dirHandle = handle;
+    else PdfStore.pendingHandle = handle;      // needs a user gesture to re-grant
+    updatePdfFolderUI();
+  } catch (e) { console.warn('PDF folder restore failed', e); }
 }
 
 function updatePdfFolderUI() {
@@ -3740,6 +3865,10 @@ function updatePdfFolderUI() {
     el.textContent = 'Folder: ' + PdfStore.dirHandle.name;
     el.style.color = '#16a34a';
     if (syncBtn) syncBtn.style.display = GDrive.token ? '' : 'none';
+  } else if (PdfStore.pendingHandle) {
+    el.textContent = '⚠ "' + PdfStore.pendingHandle.name + '" needs reconnecting — tap Select Folder';
+    el.style.color = '#dc2626';
+    if (syncBtn) syncBtn.style.display = 'none';
   } else {
     el.textContent = 'No folder selected';
     el.style.color = 'var(--text3)';
@@ -4023,8 +4152,10 @@ async function autoBackupPdf(blob, fileName, patientId) {
     try {
       const perm = await PdfStore.dirHandle.queryPermission({ mode: 'readwrite' });
       if (perm !== 'granted') await PdfStore.dirHandle.requestPermission({ mode: 'readwrite' });
-      const dir = await PdfStore.dirHandle.getDirectoryHandle(patientId, { create: true });
-      const fh = await dir.getFileHandle(fileName, { create: true });
+      // Saved FLAT in the chosen folder — the filename already encodes the date
+      // and phone (YYYYMMDD-PHONE-RX.pdf), so per-patient sub-folders only
+      // created clutter (one folder per patient holding a single file).
+      const fh = await PdfStore.dirHandle.getFileHandle(fileName, { create: true });
       const w = await fh.createWritable();
       await w.write(blob); await w.close();
       savedLocal = true;
@@ -4163,24 +4294,8 @@ async function syncPdfsToDrive() {
     }
 
     for (const item of PdfDriveQueue) {
-      // Patient sub-folder in Drive
-      const pq = encodeURIComponent("name='" + item.patientId + "' and mimeType='application/vnd.google-apps.folder' and '" + rxFolderId + "' in parents and trashed=false");
-      const ps = await fetch("https://www.googleapis.com/drive/v3/files?q=" + pq + "&fields=files(id)",
-        { headers: { Authorization: "Bearer " + GDrive.token } });
-      const pf = await ps.json();
-      let patDirId;
-      if (pf.files && pf.files.length) {
-        patDirId = pf.files[0].id;
-      } else {
-        const pc = await fetch("https://www.googleapis.com/drive/v3/files", {
-          method: "POST",
-          headers: { Authorization: "Bearer " + GDrive.token, "Content-Type": "application/json" },
-          body: JSON.stringify({ name: item.patientId, mimeType: "application/vnd.google-apps.folder", parents: [rxFolderId] })
-        });
-        patDirId = (await pc.json()).id;
-      }
-
-      const meta = { name: item.fileName, parents: [patDirId] };
+      // Saved FLAT inside the "Prescriptions" folder — no per-patient sub-folders.
+      const meta = { name: item.fileName, parents: [rxFolderId] };
       const form = new FormData();
       form.append("metadata", new Blob([JSON.stringify(meta)], { type: "application/json" }));
       form.append("file", item.blob);

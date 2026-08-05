@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260806a">
+<link rel="stylesheet" href="css/style.css?v=20260806b">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -715,10 +715,10 @@
 <div id="toast-container"></div>
 
 <!-- Scripts (order matters) -->
-<script src="js/medicines.js?v=20260806a"></script>
-<script src="js/templates.js?v=20260806a"></script>
-<script src="js/db.js?v=20260806a"></script>
-<script src="js/app.js?v=20260806a"></script>
+<script src="js/medicines.js?v=20260806b"></script>
+<script src="js/templates.js?v=20260806b"></script>
+<script src="js/db.js?v=20260806b"></script>
+<script src="js/app.js?v=20260806b"></script>
 
 <script>
 function toggleSection(header) {
@@ -970,6 +970,9 @@ GutGermina cap - Saccharomyces boulardii 250 mg</pre>
         <button class="btn-primary" onclick="driveBackupNowClick()" style="width:100%;margin-top:10px;">
           ☁ Backup Now — all patients to Drive
         </button>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;">
+          🕛 Also runs automatically once a day at midnight.
+        </div>
       </div>
 
       <!-- PDF Prescriptions Folder -->
@@ -981,7 +984,8 @@ GutGermina cap - Saccharomyces boulardii 250 mg</pre>
           <button class="btn-secondary" onclick="syncPdfsToDrive()" id="btn-sync-pdfs" style="flex:1;display:none">☁ Sync to Drive</button>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:6px;">
-          Prescriptions auto-save as PDFs on each save/print. Organised as <code>PatientID / Date.pdf</code>
+          Saved directly in the folder (no sub-folders) as <code>YYYYMMDD-PHONE-RX.pdf</code>.<br>
+          🕛 Runs automatically once a day at midnight — plus on each save/print.
         </div>
         <button class="btn-primary" onclick="backupAllPdfsNow()" style="width:100%;margin-top:10px;">
           📄 Backup Now — all new prescriptions as PDFs
@@ -1033,8 +1037,8 @@ GutGermina cap - Saccharomyces boulardii 250 mg</pre>
   </div>
 </div>
 
-<script src="js/ortho-data.js?v=20260806a"></script>
-<script src="js/body-selector.js?v=20260806a"></script>
-<script src="js/outcome-scores.js?v=20260806a"></script>
+<script src="js/ortho-data.js?v=20260806b"></script>
+<script src="js/body-selector.js?v=20260806b"></script>
+<script src="js/outcome-scores.js?v=20260806b"></script>
 </body>
 </html>
