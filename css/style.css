@@ -1031,6 +1031,11 @@ input.modal-input:focus, select.modal-input:focus {
   .patient-item { padding: 12px 14px; }
   .patient-name { font-size: 14px; }
 
+  /* Edit/delete actions always visible on touch — hover/right-click/long-press
+     don't work reliably on mobile, so reveal them permanently here. Accidental
+     taps are protected by the confirm() dialog + Recycle Bin. */
+  .patient-item-actions { display: flex; }
+
   /* Previous visits bottom section */
   .pvb-tab-head { padding: 10px 14px; }
   .pvb-day { font-size: 18px; }
