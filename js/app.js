@@ -438,7 +438,10 @@ function renderPatientList(patients = null, mode = 'recent') {
       </div>
       <div class="patient-item-right">
         <div class="patient-date">${p.lastVisit ? formatDate(p.lastVisit) : ''}</div>
-        <button class="patient-del-btn" title="Delete patient" onclick="event.stopPropagation();deletePatient('${esc(p.id)}','${esc(p.name||'')}')">✕</button>
+        <div class="patient-item-actions">
+          <button class="patient-edit-btn" title="Edit patient details" onclick="event.stopPropagation();openEditPatientFromList('${esc(p.id)}',event)">✎</button>
+          <button class="patient-del-btn" title="Delete patient" onclick="event.stopPropagation();deletePatient('${esc(p.id)}','${esc(p.name||'')}')">✕</button>
+        </div>
       </div>
     </div>
   `).join('');
@@ -472,7 +475,10 @@ async function searchPatients(query) {
       </div>
       <div class="patient-item-right">
         <div class="patient-date">${p.lastVisit ? formatDate(p.lastVisit) : ''}</div>
-        <button class="patient-del-btn" title="Delete patient" onclick="event.stopPropagation();deletePatient('${esc(p.id)}','${esc(p.name||'')}')">✕</button>
+        <div class="patient-item-actions">
+          <button class="patient-edit-btn" title="Edit patient details" onclick="event.stopPropagation();openEditPatientFromList('${esc(p.id)}',event)">✎</button>
+          <button class="patient-del-btn" title="Delete patient" onclick="event.stopPropagation();deletePatient('${esc(p.id)}','${esc(p.name||'')}')">✕</button>
+        </div>
       </div>
     </div>
   `).join('');
@@ -1117,25 +1123,46 @@ async function saveNewPatient() {
   }
 }
 
+// Edit button (✏️) in the consultation header — edits whichever patient is
+// currently open.
 function openEditPatientModal() {
   const p = State.currentPatient;
   if (!p) return;
+  _openEditModalForPatient(p);
+}
+
+// Long-press ✎ on any row in Today/Recent/Search — edits that patient WITHOUT
+// disturbing whatever is currently open in the consultation panel.
+async function openEditPatientFromList(id, event) {
+  if (event) event.stopPropagation();
+  const p = await DB.getPatient(id);
+  if (!p) { toast('Patient not found', 'error'); return; }
+  _openEditModalForPatient(p);
+}
+
+function _openEditModalForPatient(p) {
   fillPatientForm(p);
   const title = document.querySelector('#modal-new-patient .modal-title');
   if (title) title.textContent = '✏️ Edit Patient';
   const saveBtn = document.querySelector('#modal-new-patient .btn-primary');
-  if (saveBtn) { saveBtn.textContent = 'Update Patient'; saveBtn.onclick = updatePatient; }
+  if (saveBtn) { saveBtn.textContent = 'Update Patient'; saveBtn.onclick = () => updatePatientById(p.id); }
   document.getElementById('modal-new-patient').style.display = 'flex';
 }
 
-async function updatePatient() {
-  const p = State.currentPatient;
-  if (!p) return;
+async function updatePatientById(id) {
   const data = gatherPatientFormData();
-  Object.assign(p, data, { age: data.age || calcAge(data.dob) });
-  await DB.savePatient(p);
+  if (!data.name) { toast('Patient name is required', 'error'); return; }
+  const existing = await DB.getPatient(id);
+  if (!existing) { toast('Patient not found', 'error'); return; }
+  Object.assign(existing, data, { age: data.age || calcAge(data.dob) });
+  await DB.savePatient(existing);
   closeNewPatientModal();
-  updatePatientHeader();
+  // If this patient happens to be the one open in the consultation, refresh
+  // its header/State too — otherwise leave the open consultation untouched.
+  if (State.currentPatient && State.currentPatient.id === id) {
+    Object.assign(State.currentPatient, existing);
+    updatePatientHeader();
+  }
   await initPatientPanel();
   toast('Patient details updated');
 }
@@ -1862,8 +1889,8 @@ function bindMedRowLongPress() {
   });
 }
 
-// Reveal a patient row's delete ✕ only after a long/hard press — prevents
-// accidental soft-deletes (the #1 cause of patients "disappearing" into the bin).
+// Reveal a patient row's edit ✎ / delete ✕ only after a long/hard press —
+// prevents accidental taps (the #1 cause of patients "disappearing" into the bin).
 function bindPatientRowLongPress() {
   const root = document.getElementById('left-panel');
   if (!root || root._delBound) return;
@@ -1877,14 +1904,14 @@ function bindPatientRowLongPress() {
   // Swallow the click that fires when releasing a long-press (so it doesn't
   // also open the patient).
   root.addEventListener('click', e => {
-    if (suppressClick && !e.target.closest('.patient-del-btn')) {
+    if (suppressClick && !e.target.closest('.patient-del-btn') && !e.target.closest('.patient-edit-btn')) {
       e.preventDefault(); e.stopPropagation(); suppressClick = false;
     }
   }, true);
 
   root.addEventListener('pointerdown', e => {
     suppressClick = false;
-    if (e.target.closest('.patient-del-btn')) return;   // pressing ✕ itself
+    if (e.target.closest('.patient-del-btn') || e.target.closest('.patient-edit-btn')) return;   // pressing ✕/✎ itself
     const row = e.target.closest('.patient-item');
     if (!row) return;
     sx = e.clientX; sy = e.clientY;
@@ -1908,7 +1935,7 @@ function bindPatientRowLongPress() {
     if (row) { e.preventDefault(); disarm(); row.classList.add('del-armed'); }
   });
   document.addEventListener('pointerdown', e => {
-    if (!e.target.closest('.patient-item.del-armed') && !e.target.closest('.patient-del-btn')) disarm();
+    if (!e.target.closest('.patient-item.del-armed') && !e.target.closest('.patient-del-btn') && !e.target.closest('.patient-edit-btn')) disarm();
   });
 }
 
