@@ -1,6 +1,6 @@
-// Dr Chetan M Dojode – Actual Medication List (from Chetan Medication-Alpha.docx)
+// Dr Chetan M Dojode – Actual Medication List
+// Baseline seed synced from medicine-list-2026-08-20.json (84 medicines)
 // Format: { id, brand, type, form, content, dose, timings, timingsNote, duration, qty, indications }
-// Timings format matches prescription Excel: "M-A-N"  e.g. "0-1-0"
 
 const MEDICINE_SEED = [
   {
@@ -82,19 +82,6 @@ const MEDICINE_SEED = [
     indications: ["OA", "cartilage", "glucosamine", "collagen", "cartigen"]
   },
   {
-    id: 8,
-    brand: "DFO 4X Solution",
-    type: "GEL",
-    form: "Topical Solution",
-    content: "Diclofenac diethylamine 1.16% w/w + Methyl salicylate 10% w/w + Menthol 3% w/w + Linseed oil + Alcohol",
-    dose: "Apply",
-    timings: "3-4 times daily",
-    timingsNote: "Over affected area",
-    duration: "14 Days",
-    qty: "1 bottle",
-    indications: ["pain", "topical", "joint pain", "sports injury", "diclofenac", "DFO"]
-  },
-  {
     id: 9,
     brand: "D Rise 60,000 IU",
     type: "CAP",
@@ -171,19 +158,6 @@ const MEDICINE_SEED = [
     duration: "90 Days",
     qty: "90",
     indications: ["gout", "hyperuricemia", "uric acid", "febuxostat", "febustat"]
-  },
-  {
-    id: 15,
-    brand: "Felicita OD",
-    type: "TAB",
-    form: "Tablet",
-    content: "Benfotiamine 150 mg + Alpha-lipoic Acid 100 mg + Methylcobalamin 1500 µg + Chromium Polynicotinate 200 µg",
-    dose: "1",
-    timings: "1-0-0",
-    timingsNote: "After Food",
-    duration: "30 Days",
-    qty: "30",
-    indications: ["neuropathy", "nerve", "B12", "diabetic neuropathy", "felicita", "benfotiamine", "methylcobalamin"]
   },
   {
     id: 16,
@@ -316,19 +290,6 @@ const MEDICINE_SEED = [
     indications: ["probiotic", "diarrhea", "gut flora", "GI", "antibiotic associated", "gutgermina"]
   },
   {
-    id: 26,
-    brand: "Hitap ER 50 mg",
-    type: "TAB",
-    form: "Tablet (Extended Release)",
-    content: "Tapentadol Extended Release 50 mg",
-    dose: "1",
-    timings: "1-0-1",
-    timingsNote: "After Food – do not crush",
-    duration: "5 Days",
-    qty: "10",
-    indications: ["severe pain", "chronic pain", "tapentadol", "opioid", "hitap"]
-  },
-  {
     id: 27,
     brand: "Lumia 60,000 IU",
     type: "CAP",
@@ -392,19 +353,6 @@ const MEDICINE_SEED = [
     duration: "7 Days",
     qty: "1 tube",
     indications: ["wound", "infection", "skin", "mupirocin", "antibiotic cream", "mupimet"]
-  },
-  {
-    id: 32,
-    brand: "MyoFatige",
-    type: "TAB",
-    form: "Tablet",
-    content: "MyoInositol 2 g + D-ChiroInositol 200 mg + L-Arginine 1 g + L-Carnitine 500 mg + Coenzyme Q10 100 mg + Folic Acid 1.5 mg",
-    dose: "1",
-    timings: "1-0-0",
-    timingsNote: "After Food",
-    duration: "90 Days",
-    qty: "90",
-    indications: ["fatigue", "muscle recovery", "energy", "myoinositol", "coenzyme Q10", "myofatige"]
   },
   {
     id: 33,
@@ -886,59 +834,305 @@ const MEDICINE_SEED = [
     duration: "90 Days",
     qty: "90",
     indications: ["PCOS", "insulin resistance", "inositol", "folic acid", "winzest"]
-  }
+  },
+  {
+    id: "cm_1786105830633",
+    brand: "ImproSyn Tablets",
+    content: "CaHMB, L- carnosine, and Astaxanthin",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-1-0 (Afternoon)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "30 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1786106127424",
+    brand: "Grantin-D Gel 30 gm",
+    content: "Composition: CAPSAICIN-0.035%W/W+DICLOFENAC-5%W/W+MENTHOL-5%W/W+METHYL SALICYLATE-10%W/W+PREGABALIN-8%W/W",
+    type: "GEL",
+    form: "GEL",
+    route: "Local",
+    timings: "1-0-1 (Morning-Night)",
+    timingsNote: "As directed",
+    frequency: "Twice Daily",
+    duration: "5 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1784900291040",
+    brand: "Nervijen NP",
+    content: "Methylcobalamin (1500mcg)+ Nortriptyline (10mg)+ Pregabalin (75mg)",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-0-1 (Night)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "30 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1784900383963",
+    brand: "Jointace Trio",
+    content: "Aflapin(Boswellia serrata gum resin extract)  Native (Undenatured) Collagen Type II  Mobilee (Sodium Hyaluronate, Polysaccharides, Collagen)",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-0-1 (Night)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "30 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783080012552",
+    brand: "Pyrigesic",
+    content: "Paracetamol 1000mg",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "1-0-1 (Morning-Night)",
+    timingsNote: "After meals",
+    frequency: "Twice Daily",
+    duration: "3 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783080706779",
+    brand: "Ezact 60mg",
+    content: "Etoricoxib 60mg",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "1-0-1 (Morning-Night)",
+    timingsNote: "After meals",
+    frequency: "Twice Daily",
+    duration: "5 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783081033726",
+    brand: "Ezact MR",
+    content: "Etoricoxib (60mg)+ Thiocolchicoside (4mg)",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "1-0-1 (Morning-Night)",
+    timingsNote: "After meals",
+    frequency: "Twice Daily",
+    duration: "5 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783081442653",
+    brand: "Dynapar QPS Plus Spray",
+    content: "Diclofenac Diethylamine IP 2.32% w/v Equivalent to Diclofenac Sodium IP2.00% w/v  Methyl Salicylate IP 10.00% w/v  Menthol IP 5.0% w/v  Absolute Alcohol IP 10.00% v In Topical Solution Base (Non-Aqueous) q.s",
+    type: "SPRAY",
+    form: "SPRAY",
+    route: "Topical",
+    timings: "1-0-1 (Morning-Night)",
+    timingsNote: "After meals",
+    frequency: "Twice Daily",
+    duration: "5 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783081593939",
+    brand: "T-R3",
+    content: "L-Arginine Alphaketoglutarate, Mucopolysaccharide, Diluent (INS 460(i)), Curcuminoids (Curcuminoids 95%), Disintegrants (INS 468, Sodium starch glycolate), Hydrolysed Collagen Peptides type-I, Bromelain (Ananas comosus Fruit), Sodium Hyaluronate",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-1-0 (Afternoon)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "20 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783081645692",
+    brand: "Jointace DN",
+    content: "Diacerein (50mg)+ Glucosamine (750mg)+ Methyl Sulfonyl Methane (250mg)",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-1-0 (Afternoon)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "20 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783081733869",
+    brand: "Jointace Trio",
+    content: "Aflapin(Boswellia serrata gum resin extract)  Native (Undenatured) Collagen Type II  Mobilee (Sodium Hyaluronate, Polysaccharides, Collagen)",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-1-0 (Afternoon)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "20 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783081830021",
+    brand: "Uprise D3",
+    content: "Vitamin D3 (60000IU)",
+    type: "CAP",
+    form: "CAP",
+    route: "Oral",
+    timings: "0-1-0 (Afternoon)",
+    timingsNote: "After meals",
+    frequency: "Once a week",
+    duration: "8 Weeks",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783168449361",
+    brand: "Ibuprofen",
+    content: "200mg",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "1-0-1 (Morning-Night)",
+    timingsNote: "After meals",
+    frequency: "Twice Daily",
+    duration: "3 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783168490595",
+    brand: "Limcee",
+    content: "Vit C 500mg",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-1-0 (Afternoon)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "20 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783222264119",
+    brand: "Myoril Maxx",
+    content: "ACECLOFENAC-100MG+PARACETAMOL-325MG+THIOCOLCHICOSIDE-4MG",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "1-0-1 (Morning-Night)",
+    timingsNote: "After meals",
+    frequency: "Twice Daily",
+    duration: "5 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783222344035",
+    brand: "Shelcal 500",
+    content: "Elemental Calcium: 500 mg Vitamin D3 (Cholecalciferol): 250 IU",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-1-0 (Afternoon)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "30 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783223445001",
+    brand: "Nervmax-XT OD",
+    content: "Palmitoylethanolamide (PEA): 600 mgUridine Monophosphate: 18 mgVitamin D3 (Cholecalciferol): 400 IUVitamin B9 (Folic Acid): 129.41 mcgVitamin B12 (Methylcobalamin): 2.2 mcg",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-1-0 (Afternoon)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "20 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783251835222",
+    brand: "Zotide One 600mcg",
+    content: "Teriparatide (20mcg per day)",
+    type: "INJ",
+    form: "INJ",
+    route: "Subcutaneous",
+    timings: "0-0-1 (Night)",
+    timingsNote: "As directed",
+    frequency: "Once a day",
+    duration: "3 Months",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1783342128697",
+    brand: "Osteofos",
+    content: "Alendronic Acid (70mg)",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "1-0-0 (Morning)",
+    timingsNote: "After meals",
+    frequency: "Once a week",
+    duration: "3 Months",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
+  {
+    id: "cm_1786107634465",
+    brand: "LIGASHOT FORTE TAB",
+    content: "Commiphora wightii extract with Amino acids, Vitamins, Mineral and Sodium hyaluronate",
+    type: "TAB",
+    form: "TAB",
+    route: "Oral",
+    timings: "0-1-0 (Afternoon)",
+    timingsNote: "After meals",
+    frequency: "Once a day",
+    duration: "30 Days",
+    dose: "1",
+    qty: "",
+    indications: []
+  },
 ];
-
-// ── Search ────────────────────────────────────────────────────────────────────
-function searchMedicines(query, limit = 15) {
-  if (!query || !query.trim()) return [...MEDICINE_DB]; // return ALL when empty (dropdown)
-  const q = query.toLowerCase().trim();
-
-  const scored = MEDICINE_DB.map(med => {
-    const brand   = med.brand.toLowerCase();
-    const content = med.content.toLowerCase();
-    const indics  = med.indications.join(' ').toLowerCase();
-    let score = 0;
-
-    if (brand.startsWith(q))          score += 100;
-    else if (brand.includes(q))        score += 70;
-    else if (content.includes(q))      score += 50;
-    else if (indics.includes(q))       score += 30;
-    else if (fuzzyMatch(q, brand))     score += 20;
-    else if (fuzzyMatch(q, content))   score += 10;
-    else if (fuzzyMatch(q, indics))    score += 5;
-
-    return { med, score };
-  });
-
-  return scored
-    .filter(x => x.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map(x => x.med);
-}
-
-function fuzzyMatch(query, text) {
-  let qi = 0;
-  for (let i = 0; i < text.length && qi < query.length; i++) {
-    if (text[i] === query[qi]) qi++;
-  }
-  return qi === query.length;
-}
-
-// Type badge colour map
-const TYPE_COLORS = {
-  TAB:   { bg: '#e3f2fd', color: '#1565c0' },
-  CAP:   { bg: '#f3e5f5', color: '#6a1b9a' },
-  INJ:   { bg: '#fce4ec', color: '#c62828' },
-  GEL:   { bg: '#e8f5e9', color: '#2e7d32' },
-  CREAM: { bg: '#e8f5e9', color: '#2e7d32' },
-  SPRAY: { bg: '#fff3e0', color: '#e65100' },
-  SYP:   { bg: '#e0f7fa', color: '#006064' },
-  PWD:   { bg: '#fafafa', color: '#424242' },
-  KIT:   { bg: '#e8eaf6', color: '#283593' },
-};
-function typeBadgeStyle(type) {
-  const c = TYPE_COLORS[type] || { bg: '#f5f5f5', color: '#555' };
-  return `background:${c.bg};color:${c.color}`;
-}

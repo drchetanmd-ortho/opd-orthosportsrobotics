@@ -2413,7 +2413,7 @@ function printInvoice() {
 <div class="page">
   <div class="inv-header">
     <div>
-      <img src="assets/logo.png?v=20260806" style="height:52px;width:52px;object-fit:contain;margin-bottom:4px;display:block;" alt="OSR">
+      <img src="assets/logo.png?v=20260814emr" style="height:52px;width:52px;object-fit:contain;margin-bottom:4px;display:block;" alt="OSR">
       <div class="clinic-name">OSR — OrthoSportsRobotics Clinic / Aarna Clinic</div>
       <div class="clinic-sub">Dr Chetan M Dojode · MS (Orth) · ${DOCTOR.phone}<br>${DOCTOR.clinics[0].address.replace(/\n/g,', ')}</div>
     </div>
@@ -2840,7 +2840,7 @@ async function printPrescription() {
       </div>
     </div>
     <div class="header-right">
-      <img src="assets/logo.png?v=20260806" style="height:70px;width:70px;object-fit:contain;" alt="OSR — OrthoSportsRobotics Clinic / Aarna Clinic">
+      <img src="assets/logo.png?v=20260814emr" style="height:70px;width:70px;object-fit:contain;" alt="OSR — OrthoSportsRobotics Clinic / Aarna Clinic">
     </div>
   </div>
 
@@ -3121,7 +3121,7 @@ let _logoDataUrl = null;
 async function getLogoDataUrl() {
   if (_logoDataUrl) return _logoDataUrl;
   try {
-    const resp = await fetch('assets/logo.png?v=20260806');
+    const resp = await fetch('assets/logo.png?v=20260814emr');
     const blob = await resp.blob();
     return new Promise(res => {
       const r = new FileReader();
