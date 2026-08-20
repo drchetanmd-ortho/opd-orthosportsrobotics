@@ -1479,6 +1479,23 @@ function addMedicine(med) {
   toast(`✓ Added ${med.brand}`);
 }
 
+// Inline color/background per medicine type, used for the small type badges
+// shown next to a medicine's brand name (Rx search dropdown + A-Z browser).
+const TYPE_BADGE_COLORS = {
+  TAB:   { bg: '#e3f2fd', fg: '#1565c0' },
+  CAP:   { bg: '#ede7f6', fg: '#5e35b1' },
+  INJ:   { bg: '#ffebee', fg: '#c62828' },
+  GEL:   { bg: '#e0f7fa', fg: '#00838f' },
+  CREAM: { bg: '#e0f7fa', fg: '#00838f' },
+  SPRAY: { bg: '#e8f5e9', fg: '#2e7d32' },
+  PWD:   { bg: '#fff3e0', fg: '#ef6c00' },
+  KIT:   { bg: '#fce4ec', fg: '#ad1457' },
+};
+function typeBadgeStyle(type) {
+  const c = TYPE_BADGE_COLORS[(type || '').toUpperCase()] || { bg: '#f0f0f0', fg: '#555' };
+  return `background:${c.bg};color:${c.fg};`;
+}
+
 // ─── Inline Rx Search ─────────────────────────────────────────────────────────
 // Dropdown is portalled to body (position:fixed) to escape .rx-section overflow:hidden clipping
 function _getRxDropdown() {
@@ -1526,7 +1543,7 @@ function rxInlineSearch(query) {
   resultsEl.innerHTML = results.map(med => {
     const already = State.medicines.some(m => String(m.med.id) === String(med.id));
     return `<div class="rx-inline-opt${already ? ' rx-inline-added' : ''}" onclick="${already ? '' : `rxInlinePick('${String(med.id).replace(/'/g, "\\'")}')`}">
-      <span class="rx-inline-type" style="${typeBadgeStyle(med.type)}">${med.type}</span>
+      <span class="rx-inline-type" style="${typeBadgeStyle(med.type)}">${esc(med.type||'')}</span>
       <span class="rx-inline-brand">${esc(med.brand)}</span>
       <span class="rx-inline-content">${esc(med.content)}</span>
       ${already ? '<span class="rx-inline-tick">✓</span>' : ''}
